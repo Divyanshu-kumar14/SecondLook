@@ -38,14 +38,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
  && npm cache clean --force
 
-# Build artefacts from stage 1.
-COPY --from=builder /app/dist ./dist
-
-# `fixtures/` is a RUNTIME dependency, not test data: server/index.ts imports
-# ../fixtures/seed.js to seed the demo log on every boot. Dropping this directory
-# is what makes "no environment variables" false — the server would boot with an
-# empty log and every rule would return NONE_FOUND_IN_RECORD for the wrong reason.
-COPY fixtures ./fixtures
+# Build artefacts from stage 1. This ALONE is sufficient to run the server:
+# `tsc` compiles `fixtures/` into `dist/node/fixtures/`, and the server imports
+# `../fixtures/seed.js`, which resolves inside dist. Verified by booting a tree
+# containing nothing but dist + production node_modules — no `fixtures/` source
+# — and getting the canonical three findings back. See F36.
 
 # The log is written to .data/ at runtime, so the app tree must be writable by
 # the unprivileged user we drop to below.
@@ -61,4 +58,9 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # No environment variables. Every process.env read in server/ has a default
 # (`?? 'demo'`, `?? '.data/events.jsonl'`, ...), which is what lets DoD #1 hold.
-CMD ["npm", "start"]
+#
+# Invoked directly rather than via `npm start`. npm as PID 1 does not forward
+# SIGTERM, so `docker stop` would wait out the full 10s timeout and then SIGKILL
+# — which, in demo mode, means the log is never flushed on shutdown. This exact
+# command is what the runtime simulation was verified with.
+CMD ["node", "dist/node/server/index.js"]

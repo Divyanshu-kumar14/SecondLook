@@ -268,10 +268,12 @@ findings. No server module imports a dev dependency at runtime.
 
 A [`Dockerfile`](Dockerfile) is included. It is **Debian-based, not Alpine**: the
 client build pulls two prebuilt glibc binaries and Alpine's musl would fail to
-load them (**D24**). The image was not built here — the build machine's Docker
-socket is `root:docker` and adding the group needs `sudo`. What was verified is
-the part that would actually fail: the clean-clone path and the production-only
-runtime, both end to end.
+load them (**D24**). The image was **not built here** — the build machine's
+Docker socket is `root:docker` and joining that group needs `sudo`. Both stages
+were instead executed instruction by instruction in a pristine tree: the build
+stage produces the artefacts, and a runtime stage holding nothing but `dist`
+plus production-only dependencies boots, serves the client, and returns the
+same three findings.
 
 ### Protocol conformance (PRD §9)
 

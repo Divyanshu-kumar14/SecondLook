@@ -298,15 +298,25 @@ would copy the host's warmed module tree into the image and the build would succ
 whether the lockfile works — P5-1 would pass while proving nothing, which is the specific failure
 mode the task exists to catch.
 
-**Verified, not asserted.** A production-only install (`npm ci --omit=dev`, 100 packages against
-290 for the full dev tree) boots, seeds the same 19 events with the same `sha256 0dc4f804…`, serves
-the client and answers `find_problems` with the same three findings. No server module imports a
-dev dependency at runtime.
+**Verified, not asserted.** The image itself has **not** been built — the build machine's Docker
+socket is `root:docker` and joining that group needs `sudo`, which is unavailable here. That is
+stated in the Dockerfile and the README rather than glossed.
 
-**Known limit.** Docker itself was unavailable on the build machine (the socket is `root:docker`
-and adding the group needs `sudo`). The Dockerfile is therefore unexecuted. What *was* verified is
-the part that would fail: the clean-clone path and the production-only runtime, both run end to
-end.
+What was verified is both stages, executed instruction by instruction in a pristine tree:
+
+- **Builder** — `npm ci --ignore-scripts` (291 packages) then `npm run build` succeeds in ~480 ms,
+  producing `dist/node/server/index.js`, `dist/client/index.html` and the client bundle.
+- **Runtime** — `npm ci --omit=dev` (100 packages against 291 for the full dev tree) then boot on
+  nothing but `dist` plus production modules: serves the client, seeds the same 19 events with
+  `sha256 0dc4f804…`, and answers `find_problems` with the canonical three findings.
+
+That second run corrected an error this decision originally carried: the runtime stage was
+copying `fixtures/` source on the stated grounds that the server imports it. It does not need to —
+`tsc` compiles it into `dist/node/fixtures/`, and the import resolves there. The COPY is gone. See
+**F36**.
+
+**Also corrected here:** `CMD` invokes `node` directly rather than `npm start`. npm as PID 1 does
+not forward SIGTERM, so `docker stop` waits out the full 10-second timeout and then SIGKILLs.
 
 ## D25 — The hash chain verifies stored bytes, not the schema's projection of them *(new, Phase 5)*
 **Status: RESOLVED**
