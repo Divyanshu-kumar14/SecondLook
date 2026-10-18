@@ -438,3 +438,37 @@ submission's front door is the same class of error this project exists to catch,
 four phases because nobody re-read the README against a running command.
 **Cost.** 5 min.
 **Would we do it differently.** Would treat any number in the README as generated, not typed.
+
+### F33 · Four tools violated their own output schemas, and nothing could see it · P5/P3-7 · RESOLVED
+**What happened.** Driving the built client through a real browser found that the **evidence drawer had never worked**. Not intermittently — every finding, every run, rendered "No records could be loaded". The handover panel never loaded. Demo beat 2, the refusal, rendered a raw protocol error instead of a refusal.
+**Why it happened.** One pattern, four times over:
+```
+ExplainProblemOutput.parse(payload);                   // validates 3 fields
+return ok({ ...payload, what, evidenceDetail, ... }); // ships 7
+```
+Every handler built a *narrow* payload, validated that, then returned a *wider* object. A real MCP client validates the whole response against `outputSchema`, and our schemas are strict (`additionalProperties: false`), so any undeclared field is a hard `-32602`. The server validated something the user never received.
+**How we found it.** Playwright against the live server, during P5. Not a test, not a linter, not the protocol sweep — a browser.
+**What we changed.** Build the complete payload *before* parsing, so `.parse()` validates what actually ships. Schemas extended for `explain_problem`, `get_handoff` (including a conditional `acknowledged` on nested items), `record_dose`, and `request_regimen_change`. The `ok(payload as unknown as Record<string, unknown>)` cast in `request_regimen_change` was removed — that cast is precisely what let the mismatch hide.
+**Cost.** 2 h. This is the most consequential bug in the project and it shipped through four phases.
+**Would we do it differently.** Would have asked, of every handler, *"does `.parse()` see exactly what `ok()` sends?"* The answer was no four times, and the question took ninety seconds.
+
+### F34 · A `.trim()` ate a space in the spoken answer · P4-3 · RESOLVED
+**What happened.** The spoken summary read `...check the label with the pharmacy.Seen, not fixed.` — no space after the full stop, at every acknowledgement.
+**Why it happened.**
+```
+const ack = finding.acknowledged ? ' Seen, not fixed.' : '';  // leading space is load-bearing
+const sentence = `...${action}.` + `${ack}`.trim();             // trim() deletes it
+```
+The `.trim()` was there to tidy the empty case, where it was a no-op, and it also removed the one character doing real work.
+**How we found it.** Reading the rendered screenshot. The browser harness does not check wording, so this one was mine, not the tool's.
+**What we changed.** Dropped the `.trim()`. The existing test asserted `toMatch(/Seen, not fixed/)` — a bare substring that passed with the bug present — and now asserts `/\. Seen, not fixed\.$/`, which fails against the old code.
+**Cost.** 15 min.
+**Would we do it differently.** Would not `.trim()` a fragment whose leading whitespace was deliberately written. And would not match a substring when the defect is an adjacent character.
+
+### F35 · Our first regression test passed against the broken code · P5 · RESOLVED
+**What happened.** The regression test for F33 passed on the *unfixed* server. It would have shipped a green suite guarding a green lie.
+**Why it happened.** The test called each tool through the SDK `Client` over `InMemoryTransport` and expected no throw. That transport does not validate responses against `outputSchema` — the entire mechanism F33 relied on. The test exercised the one path where the bug is invisible.
+**How we found it.** We ran it against the pre-fix code on purpose, having learned the lesson from the hash-chain fix. A test that cannot fail is not evidence.
+**What we changed.** Rewrote it as a data-level assertion: call every tool, then compare the keys actually returned against the keys its declared schema lists. Transport-independent, so it holds on any transport. Confirmed to fail pre-fix and pass post-fix.
+**Cost.** 20 min.
+**Would we do it differently.** Would validate a new regression test against the broken code *before* trusting it, every time — not just the once we remembered to. Two separate regression tests in this project have now had to be redone for this same reason.

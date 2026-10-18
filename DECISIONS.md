@@ -357,3 +357,35 @@ with a finding is motion that hides it.
 interface. It was decoration — the speaker was already labelled — so the edge was removed and
 surface does the work. Detection was re-run after updating Impeccable from v4.2.0 to v4.6.0,
 because a pass under the old rules is not a pass under the new ones.
+
+## D27 — A tool handler builds its whole payload before validating it *(new, Phase 5)*
+**Status: RESOLVED**
+
+F33: four handlers validated a narrow payload and then returned a wider object, so every
+`explain_problem` and `get_handoff` call was rejected by any real MCP client with `-32602`.
+
+**Decision.** Build the complete payload first, parse *that*, return *that*.
+
+```ts
+const payload: ExplainProblemOut = { rules, derivation, events, what, evidenceDetail, nextAction };
+ExplainProblemOutput.parse(payload);   // validates exactly what ships
+return ok({ ...payload });
+```
+
+**Why this shape and not "just extend the schema".** Extending the schema alone would have fixed
+the four known tools and left the trap in place. In this shape the type system closes it: the
+handler's payload is typed as the schema's own output type, so a field the schema does not
+declare is a compile error. That it flagged the remaining three the instant the first schema was
+corrected is the evidence that it works, not a claim that it should.
+
+**Corollary: no `as unknown as` at a contract boundary.** `request_regimen_change` ended with
+`ok(payload as unknown as Record<string, unknown>)`. That cast existed only because an interface
+has no index signature — and it made the response uninspectable by anything downstream. Replaced
+with a spread. ESLint's `no-unnecessary-type-assertion` already flagged it as removable; we had
+read that and left it.
+
+**Consequence for how we verify.** The unit suite cannot see this class. `InMemoryTransport` skips
+output-schema validation, and curl does not implement it either — those are the two paths every
+existing check used. Verification now runs through a real client over a real transport
+(`npm run verify-ui`), and the regression test asserts on returned keys rather than on transport
+behaviour, so it holds wherever it runs.

@@ -26,6 +26,8 @@ npm run verify-log
 > the system enforces constraints that arrive in the care record, it does not
 > decide what is medically correct on its own.
 
+![The client showing a critical finding about ibuprofen with its four supporting records expanded, each labelled with who recorded it and when](docs/assets/findings-with-evidence.png)
+
 ## The problem
 
 A household caring for someone with several medications has paperwork from a
@@ -72,6 +74,8 @@ client, and each one is a real MCP tool call — never the log or the fold.
 Other buttons: **Record a dose**, **What is he on?**, **Audit log**. The right
 column also holds the latency HUD and a protocol inspector showing the version
 actually negotiated during the handshake.
+
+![The client with Tom selected, refusing his request to change a regimen and telling him who can](docs/assets/refusal-as-tom.png)
 
 ## Key innovations
 
@@ -368,6 +372,7 @@ npm run dev              # server :8787 + Vite :5173
 npm run verify         # typecheck + lint + tests + coverage gate
 npm run verify-protocol    # PRD §9; needs the server up
 npm run verify-log       # hash chain; exits 1 if tampered
+npm run verify-ui        # drives the built client in a real browser
 npm run bench            # latency budgets
 npm run seed             # re-seed the deterministic log
 scripts/transcript.sh      # replay the demo spine
@@ -375,6 +380,16 @@ scripts/transcript.sh      # replay the demo spine
 
 `npm run dev` and `npm start` must not run at the same time — they both want
 port 8787.
+
+`verify-ui` is the one that arrived last and matters most. It needs a Chromium
+binary, and tells you how to get one if it cannot find it. It is deliberately
+**not** part of `npm run verify`: the fast, zero-config path a judge takes should
+stay that way.
+
+It exists because **four tools were violating their own declared output schemas
+while every other gate passed** — the evidence drawer had never once rendered,
+and neither curl nor the in-memory test transport can see that class of bug. See
+**F33** / **D27**.
 
 ## Limitations
 
@@ -387,8 +402,9 @@ Stated plainly, because the demo is more useful when its edges are known.
   and append-only sits in direct tension with any deletion policy. Unresolved.
 - **A hash chain is not a signature.** It detects edits, not a wholesale rewrite
   by someone who can rewrite the whole file.
-- **Responsive layout below desktop is unverified**, and no human has reviewed the
-  rebuilt interface.
+- **`verify-ui` is opt-in and needs a browser.** It is the check that caught the
+  worst bug in this project, and it is also the one a judge is least likely to
+  run. Nothing in the default gate can see that class of failure.
 - **The Docker image has not been built**, only its contents verified.
 
 ## Design records

@@ -39,10 +39,10 @@
 ### Test suite
 ```
 Test Files  13 passed (13)
-     Tests  205 passed (205)
-Lines        : 94.81% ( 311/328 )
+     Tests  207 passed (207)
+Lines        : 95.42% ( 313/328 )
 ```
-205 after the Phase 5 tamper fix added three; 202 at the close of this phase.
+207 after the Phase 5 fixes added four; 202 at the close of this phase.
 
 ### Design detector
 ```
@@ -92,17 +92,29 @@ rather than reverse-engineering the stylesheet.
 
 ## Honest gaps
 
-**Nobody has seen this render.** Every gate passes — typecheck, lint, 205 tests, coverage, build,
-design detector — and no human has looked at the rebuilt interface. Automated checks confirm the
-code is correct; they do not confirm it is usable, calm, or legible. This is the single largest
-open risk in the phase and it is not closable by any tool available to me.
+**Superseded in Phase 5 — recorded here as it stood at the close of Phase 4.** The first
+statement below was the single largest open risk in this phase, and it is now closed; the second
+was a bug, not a gap.
 
-**Responsive is unverified below desktop.** Breakpoints were written and reasoned about; nothing
-below `lg` has been rendered on a real screen.
+**Nobody had seen this render.** Every automated gate passed — typecheck, lint, 205 tests,
+coverage, build — and no human had looked at the rebuilt interface. *Closed in Phase 5:* a live
+browser check now drives the demo spine end to end (`npm run verify-ui`, 20/20), and screenshots
+have been reviewed. That pass is what surfaced F33, which had been broken since Phase 3.
+
+**Responsive was unverified below desktop.** *Closed in Phase 5:* the check now asserts zero
+horizontal overflow at 768 px and 390 px, and both were confirmed visually.
 
 **Tier-0 accessibility is asserted, not witnessed.** `prefers-reduced-motion` is honoured at two
-independent layers, focus rings are themed, and the transcript is a live region. All of it is
-code-level conformance. Seeing it work requires a human with the OS setting toggled.
+independent layers, focus rings are themed, and the transcript is a live region. Still true —
+the automated check confirms durations collapse under a simulated `reduce` preference, but only a
+person can confirm it feels right.
+
+**The defect the automated gates could not see.** F33: four tools returned responses that
+violated their own declared `outputSchema`, so any real MCP client rejected them. The evidence
+drawer had never once rendered. Neither curl nor the in-memory test transport validates output
+schemas, which is why 207 tests and a 17/17 protocol sweep all passed while the headline feature
+was broken. This is the most important thing this phase produced, even though it was found after
+it: **the tests were not the thing that was wrong — they were the thing that could not look.**
 
 ## Outstanding
 
