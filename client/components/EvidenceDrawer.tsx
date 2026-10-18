@@ -1,11 +1,13 @@
 /**
  * Evidence drawer (Phase 4, task P4-4).
  *
- * Lists the actual event ids behind a finding. Provenance is shown as
- * "recorded by Tom, from the discharge paper" — the actor is who RECORDED the
- * evidence, never who caused the problem. The wording enforces that.
+ * Lists the actual event ids behind a finding. Provenance is written as
+ * "recorded by Tom, from a caregiver" — the actor is who RECORDED the evidence,
+ * never who caused the problem. The wording lives in one function so it cannot
+ * drift into blame somewhere downstream.
  */
 import { useId, useState } from 'react';
+import { Expand } from '../motion.js';
 
 export interface EvidenceItem {
   eventId: string;
@@ -49,38 +51,54 @@ export function EvidenceDrawer({
       : `Show the ${items.length} record${items.length === 1 ? '' : 's'} behind this`;
 
   return (
-    <div className="drawer">
+    <div className="mt-3">
       <button
         type="button"
-        className="drawer-toggle"
         aria-expanded={open}
         aria-controls={panelId}
         aria-busy={loading === true}
         disabled={loading === true}
         onClick={() => setOpen((v) => !v)}
+        className="text-[0.8rem] text-trust underline decoration-trust/40 underline-offset-4 transition-colors hover:decoration-trust disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline"
       >
         {open ? 'Hide' : label}
       </button>
 
-      <div id={panelId} hidden={!open} className="drawer-panel">
-        {items.length === 0 ? (
-          <p className="muted">
-            {loading ? 'Still loading…' : 'The records for this finding could not be loaded.'}
-          </p>
-        ) : (
-          <ol className="evidence-list">
-            {items.map((item) => (
-              <li key={item.eventId}>
-                <span className="evidence-summary">
-                  {item.summary ?? item.type ?? 'event'}
-                </span>
-                <span className="evidence-prov">{provenanceLine(item)}</span>
-                <code className="evidence-id">{item.eventId}</code>
-                {item.ts ? <time dateTime={item.ts}>{item.ts.slice(0, 16).replace('T', ' ')}</time> : null}
-              </li>
-            ))}
-          </ol>
-        )}
+      <div id={panelId} hidden={!open}>
+        <Expand open={open}>
+          <div className="mt-2 rounded border border-rule bg-card p-3">
+            {items.length === 0 ? (
+              <p className="text-sm text-ink-faint">
+                {loading ? 'Still loading…' : 'The records for this finding could not be loaded.'}
+              </p>
+            ) : (
+              <ol className="grid gap-2.5">
+                {items.map((item) => (
+                  <li
+                    key={item.eventId}
+                    className="grid gap-0.5 border-b border-rule/60 pb-2.5 text-[0.8rem] last:border-b-0 last:pb-0"
+                  >
+                    <span className="font-medium">{item.summary ?? item.type ?? 'event'}</span>
+                    <span className="text-ink-soft italic">{provenanceLine(item)}</span>
+                    <span className="flex flex-wrap items-baseline gap-2">
+                      <code className="font-mono text-[0.68rem] break-all text-ink-faint">
+                        {item.eventId}
+                      </code>
+                      {item.ts ? (
+                        <time
+                          dateTime={item.ts}
+                          className="tnum text-[0.68rem] text-ink-faint"
+                        >
+                          {item.ts.slice(0, 16).replace('T', ' ')}
+                        </time>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </Expand>
       </div>
     </div>
   );

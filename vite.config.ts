@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -5,7 +6,7 @@ import react from '@vitejs/plugin-react';
 // 8s cold-start budget). It runs during `npm install` via the `prepare` script.
 export default defineConfig({
   root: 'client',
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: {
     outDir: '../dist/client',
     emptyOutDir: true,

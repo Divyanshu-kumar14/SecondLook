@@ -1,16 +1,30 @@
 /**
  * Second Look demo client (Phase 4).
  *
- * Talks REAL MCP to /mcp over the wire using the official SDK client. It never
- * reads the event log or the fold (DoD #6): every answer rendered here came back
- * from a tool call.
+ * Talks REAL MCP to /mcp over the wire using the official SDK. It never reads
+ * the event log or the fold (DoD #6): every answer rendered here came back from
+ * a tool call.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { McpConnection, PERSONAS, type CallResult, type ConnectionInfo, type Persona } from './mcp.js';
-import { EXAMPLES, route } from './router.js';
-import { speakFinding, speakNoFindings, speakRecorded, speakRefusal, speakVerdict, type Finding } from './phrase.js';
-import { EvidenceDrawer, type EvidenceItem } from './components/EvidenceDrawer.js';
-import { FindingsList, LatencyHud, ProtocolInspector, ToolList } from './components/Panels.js';
+import {
+  McpConnection,
+  PERSONAS,
+  type CallResult,
+  type ConnectionInfo,
+  type Persona,
+} from './mcp.ts';
+import { EXAMPLES, route } from './router.ts';
+import {
+  speakFinding,
+  speakNoFindings,
+  speakRecorded,
+  speakRefusal,
+  speakVerdict,
+  type Finding,
+} from './phrase.ts';
+import type { EvidenceItem } from './components/EvidenceDrawer.tsx';
+import { FindingsList, LatencyHud, ProtocolInspector, ToolList } from './components/Panels.tsx';
+import { Crossfade, MotionProvider, Turn } from './motion.tsx';
 
 interface Turn {
   id: number;
@@ -28,6 +42,14 @@ interface Turn {
 let turnSeq = 0;
 
 export function App() {
+  return (
+    <MotionProvider>
+      <Console />
+    </MotionProvider>
+  );
+}
+
+function Console() {
   const [persona, setPersona] = useState<Persona>(PERSONAS[1]!);
   const [connection, setConnection] = useState<McpConnection | null>(null);
   const [info, setInfo] = useState<ConnectionInfo | null>(null);
@@ -37,9 +59,11 @@ export function App() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [latencies, setLatencies] = useState<number[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
-  // ── connect (reconnects on persona change, so the handshake is visible) ──
+  // Connect, and reconnect on persona change so the handshake is visible and the
+  // actor is resolved per request from the real Authorization header.
   useEffect(() => {
     let cancelled = false;
     let active: McpConnection | null = null;
@@ -72,14 +96,14 @@ export function App() {
   }, [persona]);
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
+    const node = transcriptRef.current;
+    if (node) node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
   }, [turns]);
 
   const push = useCallback((turn: Omit<Turn, 'id'>) => {
     setTurns((prev) => [...prev, { ...turn, id: ++turnSeq }]);
   }, []);
 
-  /** Every rendered answer goes through a real tool call. */
   const call = useCallback(
     async (tool: string, args: Record<string, unknown>) => {
       if (!connection) throw new Error('Not connected to the MCP server.');
@@ -90,13 +114,6 @@ export function App() {
     [connection],
   );
 
-  /**
-   * Fetch the records behind each finding so the drawer can cite real ids.
-   * Runs in parallel — sequential calls made the panel look empty for seconds.
-   * Failures are surfaced rather than silently becoming "0 records", which is
-   * exactly the kind of empty result this whole project refuses to present as
-   * reassurance.
-   */
   const loadEvidence = useCallback(
     async (findings: Finding[]): Promise<Record<string, EvidenceItem[]>> => {
       const results = await Promise.all(
@@ -104,17 +121,16 @@ export function App() {
           try {
             const r = await call('explain_problem', { findingId: finding.findingId });
             const detail = r.structured.evidenceDetail;
-            if (!Array.isArray(detail)) {
-              return [finding.findingId, []] as const;
-            }
-            return [finding.findingId, detail as EvidenceItem[]] as const;
+            const items: EvidenceItem[] = Array.isArray(detail) ? [...(detail as EvidenceItem[])] : [];
+            return [finding.findingId, items] as const;
           } catch {
-            return [finding.findingId, []] as const;
+            const none: EvidenceItem[] = [];
+            return [finding.findingId, none] as const;
           }
         }),
       );
       const merged: Record<string, EvidenceItem[]> = {};
-      for (const [id, items] of results) merged[id] = [...items];
+      for (const [id, items] of results) merged[id] = items;
       return merged;
     },
     [call],
@@ -126,14 +142,11 @@ export function App() {
       if (!utterance || !connection) return;
       setBusy(true);
       setInput('');
-      push({ who: 'you', utterance, spoken: '', tool: undefined });
+      push({ who: 'you', utterance, spoken: '' });
 
       const routed = route(utterance, persona);
 
       // An unrecognised utterance does NOT silently become a different question.
-      // Falling through to the headline check answered something nobody asked —
-      // the same category of dishonesty as reporting no findings when none were
-      // looked for. Ask instead, and say what is possible.
       if (routed.matched === null) {
         push({
           who: 'system',
@@ -151,7 +164,10 @@ export function App() {
 
         if (routed.tool === 'find_problems') {
           const findings = (s.findings as Finding[] | undefined) ?? [];
-          const coverage = (s.coverage ?? {}) as { scannedEvents?: number; unloggedExpectedDoses?: number };
+          const coverage = (s.coverage ?? {}) as {
+            scannedEvents?: number;
+            unloggedExpectedDoses?: number;
+          };
           const spoken =
             findings.length > 0
               ? findings.map((f) => speakFinding(f)).join(' ')
@@ -193,10 +209,10 @@ export function App() {
           });
         } else if (routed.tool === 'get_handoff') {
           const unresolved = (s.unresolved ?? []) as { item: string }[];
-          const handoffTo = typeof s.for === 'string' ? s.for : 'the next carer';
+          const to = typeof s.for === 'string' ? s.for : 'the next carer';
           push({
             who: 'system',
-            spoken: `Handing over to ${handoffTo}. ${unresolved.length} thing${unresolved.length === 1 ? '' : 's'} still open.`,
+            spoken: `Handing over to ${to}. ${unresolved.length} thing${unresolved.length === 1 ? '' : 's'} still open.`,
             tool: routed.tool,
             ms: r.ms,
           });
@@ -217,7 +233,7 @@ export function App() {
             who: 'system',
             spoken:
               meds.length > 0
-                ? meds.map((m) => `${m.name}, ${m.status}`).join('. ') + '.'
+                ? `${meds.map((m) => `${m.name}, ${m.status}`).join('. ')}.`
                 : 'Nothing is recorded.',
             tool: routed.tool,
             ms: r.ms,
@@ -227,7 +243,6 @@ export function App() {
         push({
           who: 'system',
           spoken: err instanceof Error ? err.message : String(err),
-          tool: routed.tool,
           error: true,
         });
       } finally {
@@ -238,89 +253,122 @@ export function App() {
     [call, connection, loadEvidence, persona, push],
   );
 
-  // Findings and their evidence must come from the SAME turn. Deriving them
-  // from two independent searches let the panel show one turn's findings beside
-  // another turn's evidence.
+  // Findings and their evidence must come from the SAME turn.
   const latestFindingTurn = [...turns].reverse().find((t) => t.findings);
-  const latestFindings = latestFindingTurn?.findings;
-  const [evidenceLoading, setEvidenceLoading] = useState(false);
 
   return (
-    <div className="app">
-      <header className="app-head">
+    <div className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
+      <header className="flex flex-wrap items-start justify-between gap-6 border-b border-rule py-6">
         <div>
-          <h1>Second Look</h1>
-          <p className="tagline">Household care reconciliation.</p>
+          <h1 className="text-2xl tracking-tight text-balance sm:text-3xl">Second Look</h1>
+          <p className="mt-1 text-ink-soft">Household care reconciliation.</p>
         </div>
-        <nav aria-label="Who is speaking">
-          <h2 className="visually-hidden">Persona</h2>
-          <div className="personas" role="radiogroup" aria-label="Who is speaking">
-            {PERSONAS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                role="radio"
-                aria-checked={persona.id === p.id}
-                className={`persona ${persona.id === p.id ? 'is-active' : ''}`}
-                onClick={() => setPersona(p)}
-              >
-                <strong>{p.name}</strong>
-                <span>{p.role}</span>
-              </button>
-            ))}
+
+        <nav aria-label="Who is speaking" className="min-w-0">
+          <div
+            role="radiogroup"
+            aria-label="Who is speaking"
+            className="flex flex-wrap gap-2"
+          >
+            {PERSONAS.map((p) => {
+              const active = persona.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setPersona(p)}
+                  className={`flex flex-col items-start rounded-ctl border px-3 py-1.5 transition-colors duration-150 ${
+                    active
+                      ? 'border-ink bg-ink text-paper'
+                      : 'border-rule-strong bg-card text-ink hover:border-ink'
+                  }`}
+                >
+                  <span className="text-sm font-medium">{p.name}</span>
+                  <span
+                    className={`font-mono text-[0.7rem] ${active ? 'text-paper/70' : 'text-ink-faint'}`}
+                  >
+                    {p.role}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <p className="persona-blurb">{persona.blurb}</p>
+          <p className="mt-2 text-xs text-ink-faint">
+            <Crossfade value={persona.blurb}>{persona.blurb}</Crossfade>
+          </p>
         </nav>
       </header>
 
       {connectionError ? (
-        <p role="alert" className="banner banner-error">
+        <p role="alert" className="mt-6 rounded border border-critical bg-critical-tint px-4 py-3 text-critical">
           Cannot reach the MCP server: {connectionError}
         </p>
       ) : null}
 
-      <main className="layout">
-        <section className="col col-main" aria-labelledby="talk-heading">
-          <h2 id="talk-heading">Conversation</h2>
+      <main className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <section aria-labelledby="talk-heading">
+          <h2
+            id="talk-heading"
+            className="mb-3 text-[0.72rem] font-medium tracking-[0.08em] text-ink-faint uppercase"
+          >
+            Conversation
+          </h2>
 
           <div
-            className="transcript"
             ref={transcriptRef}
             role="log"
             aria-live="polite"
             aria-relevant="additions text"
             aria-label="Conversation transcript"
+            className="h-96 overflow-y-auto rounded-card border border-rule bg-card p-4"
           >
             {turns.length === 0 ? (
-              <p className="muted">
+              <p className="text-sm text-ink-faint">
                 Ask a question, or pick one below. Everything shown here came back from a tool.
               </p>
             ) : (
-              turns.map((turn) => (
-                <article key={turn.id} className={`turn turn-${turn.who}`}>
-                  <p className="turn-who">{turn.who === 'you' ? persona.name : 'Second Look'}</p>
-                  {turn.utterance ? <p className="turn-utterance">“{turn.utterance}”</p> : null}
-                  <p className={`turn-spoken${turn.error ? ' is-error' : ''}`}>{turn.spoken}</p>
-                  {turn.tool ? (
-                    <p className="turn-meta">
-                      <code>{turn.tool}</code>
-                      {turn.ms !== undefined ? <span>{turn.ms.toFixed(1)} ms</span> : null}
-                    </p>
-                  ) : null}
-                  {turn.note ? <p className="turn-note muted">{turn.note}</p> : null}
-                </article>
-              ))
+              <div className="grid gap-3">
+                {turns.map((turn, i) => (
+                  <Turn key={turn.id} index={i}>
+                    {/* You and Second Look differ by surface and by the name
+                        above, not by a coloured edge — an accent border is a
+                        costume, and the speaker is already labelled. */}
+                    <div
+                      className={`rounded border border-rule px-3.5 py-3 ${
+                        turn.who === 'you' ? 'bg-paper-sunk' : 'bg-card'
+                      }`}
+                    >
+                      <p className="mb-1 text-[0.68rem] tracking-[0.08em] text-ink-faint uppercase">
+                        {turn.who === 'you' ? persona.name : 'Second Look'}
+                      </p>
+                      {turn.utterance ? (
+                        <p className="mb-1.5 text-ink-soft italic">“{turn.utterance}”</p>
+                      ) : null}
+                      <p className={turn.error ? 'text-critical' : 'text-ink'}>{turn.spoken}</p>
+                      {turn.tool ? (
+                        <p className="tnum mt-2 flex gap-3 text-[0.7rem] text-ink-faint">
+                          <code className="font-mono">{turn.tool}</code>
+                          {turn.ms !== undefined ? <span>{turn.ms.toFixed(1)} ms</span> : null}
+                        </p>
+                      ) : null}
+                      {turn.note ? <p className="mt-1.5 text-[0.7rem] text-ink-faint">{turn.note}</p> : null}
+                    </div>
+                  </Turn>
+                ))}
+              </div>
             )}
           </div>
 
           <form
-            className="composer"
+            className="mt-3 flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               void ask(input);
             }}
           >
-            <label htmlFor="utterance" className="visually-hidden">
+            <label htmlFor="utterance" className="sr-only">
               What would you like to ask?
             </label>
             <input
@@ -331,16 +379,26 @@ export function App() {
               onChange={(e) => setInput(e.target.value)}
               autoComplete="off"
               disabled={busy || !connection}
+              className="min-w-0 flex-1 rounded-ctl border border-rule-strong bg-card px-3 py-2.5 text-ink placeholder:text-ink-faint focus-visible:border-trust disabled:opacity-60"
             />
-            <button type="submit" disabled={busy || !connection || input.trim() === ''}>
+            <button
+              type="submit"
+              disabled={busy || !connection || input.trim() === ''}
+              className="rounded-ctl bg-ink px-5 py-2.5 text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
               {busy ? 'Asking…' : 'Ask'}
             </button>
           </form>
 
-          <ul className="examples" aria-label="Example phrases">
+          <ul className="mt-3 flex flex-wrap gap-2" aria-label="Example phrases">
             {EXAMPLES.map((ex) => (
               <li key={ex.label}>
-                <button type="button" onClick={() => void ask(ex.text)} disabled={busy || !connection}>
+                <button
+                  type="button"
+                  onClick={() => void ask(ex.text)}
+                  disabled={busy || !connection}
+                  className="rounded-full border border-dashed border-rule-strong px-3 py-1 text-[0.78rem] text-ink-soft transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
+                >
                   {ex.label}
                 </button>
               </li>
@@ -348,39 +406,55 @@ export function App() {
           </ul>
         </section>
 
-        <aside className="col col-side" aria-label="Details">
+        <aside className="grid gap-8 lg:sticky lg:top-6" aria-label="Details">
           <section aria-labelledby="findings-heading">
-            <h2 id="findings-heading">Findings</h2>
-            {latestFindings ? (
+            <h2
+              id="findings-heading"
+              className="mb-3 text-[0.72rem] font-medium tracking-[0.08em] text-ink-faint uppercase"
+            >
+              Findings
+            </h2>
+            {latestFindingTurn?.findings ? (
               <FindingsList
-                findings={latestFindings}
-                evidenceByFinding={latestFindingTurn?.evidence ?? {}}
+                findings={latestFindingTurn.findings}
+                evidenceByFinding={latestFindingTurn.evidence ?? {}}
                 loading={evidenceLoading}
               />
             ) : (
-              <p className="muted">Ask “Are we doing this right?” to see the findings.</p>
+              <p className="text-sm text-ink-faint">
+                Ask “Are we doing this right?” to see the findings.
+              </p>
             )}
           </section>
 
           <section aria-labelledby="latency-heading">
-            <h2 id="latency-heading">Latency</h2>
+            <h2
+              id="latency-heading"
+              className="mb-2 text-[0.72rem] font-medium tracking-[0.08em] text-ink-faint uppercase"
+            >
+              Latency
+            </h2>
             <LatencyHud samples={latencies} />
           </section>
 
           <section aria-labelledby="inspector-heading">
-            <h2 id="inspector-heading">Protocol</h2>
-            {connecting ? <p className="muted">Connecting…</p> : <ProtocolInspector info={info} />}
+            <h2
+              id="inspector-heading"
+              className="mb-2 text-[0.72rem] font-medium tracking-[0.08em] text-ink-faint uppercase"
+            >
+              Protocol
+            </h2>
+            {connecting ? <p className="text-sm text-ink-faint">Connecting…</p> : <ProtocolInspector info={info} />}
             {info ? <ToolList tools={info.tools} /> : null}
           </section>
 
-          <p className="disclaimer">
-            Synthetic data. Not a medical device. Utterance routing and phrasing are
-            <strong> simulated</strong> — Alexa+ generates its own.
+          <p className="border-t border-rule pt-4 text-[0.72rem] leading-relaxed text-ink-faint">
+            Synthetic data. Not a medical device. Utterance routing and phrasing are{' '}
+            <strong className="font-medium text-ink-soft">simulated</strong> — Alexa+ generates
+            its own.
           </p>
         </aside>
       </main>
     </div>
   );
 }
-
-export { EvidenceDrawer };
