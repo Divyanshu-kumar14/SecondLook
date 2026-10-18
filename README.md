@@ -93,14 +93,14 @@ actually negotiated during the handshake.
 
 ```mermaid
 flowchart TD
-  U["Carer speaks or types"] --> C["client/App.tsx - utterance router and phrasing"]
-  C -->|"MCP over HTTP, SSE or JSON"| M["server/mcp.ts - session, Origin and Host checks"]
-  M --> T["server/tools - 8 intent-shaped tools"]
-  T --> A["server/identity.ts - actor from the bearer token"]
-  T --> L["server/log.ts - append-only SHA-256 hash chain"]
-  L --> F["server/fold.ts - events to CareState"]
-  F --> R["server/rules - R1 to R6, then group and rank"]
-  R --> S["Structured answer with evidence ids"]
+  U["Carer speaks or types"] --> C["client/App.tsx router"]
+  C -->|"MCP over HTTP"| M["server/mcp.ts session, Origin"]
+  M --> T["server/tools - 8 tools"]
+  T --> A["server/identity.ts actor"]
+  T --> L["server/log.ts hash chain"]
+  L --> F["server/fold.ts to CareState"]
+  F --> R["server/rules R1-R6"]
+  R --> S["Answer + evidence ids"]
 ```
 
 One process serves both the MCP endpoint (`POST|GET|DELETE /mcp`) and the built
@@ -146,17 +146,20 @@ identity is resolved server-side. No tool accepts an `actorId` that establishes
 who is acting; the actor is stamped at write time from the bearer token. Verified
 by probe, not by assertion:
 
-``` text
-demo-tom (role: record)                      status=refused  pending=req-caregiver-tom-…
-demo-tom + INJECTED actorId and role         status=refused  pending=req-caregiver-tom-…
-demo-priya (role: full)                      status=applied
-no Authorization header (guest)              status=refused  pending=req-guest-…
-garbage token                                status=refused  pending=req-guest-…
+```text
+demo-tom (role: record)          refused   -> caregiver-tom
+demo-tom + INJECTED actor/role   refused   -> caregiver-tom
+demo-priya (role: full)          applied
+guest (no header)                refused   -> guest
+garbage token                    refused   -> guest
 ```
+
+The right-hand column is the pending request that was created, and who it was
+attributed to.
 
 The second row is the one that matters. The request claimed full privilege in its
 arguments and was still refused, and the pending request was attributed to the
-token's identity rather than the one the client asserted.
+token's identity — `caregiver-tom` — rather than the one the client asserted.
 
 ## What we simulate, and what a real add-on would need
 
@@ -206,26 +209,21 @@ The log is append-only and SHA-256 hash-chained. There is no update and no delet
 in the write API; corrections are new superseding events. Three tamper cases, run
 against a log seeded by a clean clone:
 
-``` text
-$ npm run verify-log                                   # untouched
-[verify-log] OK — 19 events, chain intact.              exit 0
+```text
+$ npm run verify-log                  # untouched
+[verify-log] OK — 19 events, intact.   exit 0
 
-$ # edit a field the schema knows
-$ npm run verify-log
+$ npm run verify-log                  # edit a field it knows
 [verify-log] TAMPERED — chain breaks at event 5 of 19.
-             reason: hash mismatch at event 5: expected b33f057e5fa4…, got f78a8fccf0dd…
-                                                         exit 1
+             reason: hash mismatch at event 5     exit 1
 
-$ # inject fields the schema does not know
-$ npm run verify-log
+$ npm run verify-log                  # inject unknown fields
 [verify-log] TAMPERED — chain breaks at event 5 of 19.
-             reason: unexpected field(s) not in EventSchema: notes, extra —
-                     the stored record is not the record that was hashed
-                                                         exit 1
+             reason: unexpected field(s) not in
+             EventSchema: notes, extra            exit 1
 
-$ # reorder keys, change nothing else
-$ npm run verify-log
-[verify-log] OK — 19 events, chain intact.              exit 0
+$ npm run verify-log                  # reorder keys only
+[verify-log] OK — 19 events, intact.   exit 0
 ```
 
 The second case used to **pass**. `#load()` ran every line through `EventSchema`,
@@ -247,18 +245,17 @@ repository with no environment variables set.
 
 ### Clean install and cold start
 
-``` text
+```text
 $ npm install
 added 290 packages in 8s
 
 $ env -i npm start        # strips the entire environment
 [second-look] listening on http://127.0.0.1:8787
-[second-look]   MCP endpoint : POST|GET|DELETE http://127.0.0.1:8787/mcp
-[second-look]   client       : http://127.0.0.1:8787/
-[second-look]   log mode     : demo — seeded 19 events, sha256 0dc4f804d7c5d9b0…
+[second-look]   log mode     : demo — seeded 19 events
 ```
 
-Cold start to listening: **0.58 s** against an 8 s budget.
+Cold start to listening: **0.58 s** against an 8 s budget. The seed is
+`sha256 0dc4f804d7c5d9b0…`, identical on every machine.
 
 A production-only install — 100 packages against 290 for the full dev tree, the
 same dependency set the Docker runtime stage uses — boots, seeds the same 19
@@ -274,20 +271,23 @@ runtime, both end to end.
 
 ### Protocol conformance (PRD §9)
 
+`npm run verify-protocol`, against a running server. Every item in the PRD §9
+checklist:
+
+| §9 item | Result |
+| --- | --- |
+| 9.1 `initialize` → `initialized`, session id issued | pass |
+| 9.2 response mode: SSE and `application/json` | pass |
+| 9.3 `tools/list` carries full JSON Schema | pass |
+| 9.4 session id enforced on later requests | pass |
+| 9.5 `MCP-Protocol-Version` negotiated; invalid → 400 | pass |
+| 9.6 `Origin` validated on every connection | pass |
+| 9.7 binds 127.0.0.1 by default | pass |
+| 9.8 `GET` → 405, `DELETE` terminates the session | pass |
+| 9.9 JSON-RPC over UTF-8, one message per response | pass |
+
 ``` text
-$ npm run verify-protocol     # server must be running
-  §9.1 initialize / initialized / session id           ✅
-  §9.2 response mode: SSE and application/json         ✅
-  §9.3 tools/list carries full JSON Schema             ✅
-  §9.4 session id enforced on later requests           ✅
-  §9.5 MCP-Protocol-Version negotiated; invalid → 400  ✅
-  §9.6 Origin validated on every connection            ✅
-  §9.7 binds 127.0.0.1 by default                      ✅
-  §9.8 GET → 405, DELETE terminates the session         ✅
-  §9.9 JSON-RPC over UTF-8, one message per response   ✅
-──────────────────────────────────────────
-  passed: 17   failed: 0
-──────────────────────────────────────────
+passed: 17   failed: 0
 ```
 
 ### Tests and coverage
@@ -305,14 +305,15 @@ model — the four places where a defect would be a safety problem. Current:
 
 ### Latency
 
-``` text
-$ npm run bench
-  find_problems (rules only)        p50  0.06 ms   p95  0.13 ms   budget 150 ms   PASS
-  find_problems (full tool path)    p50  0.10 ms   p95  0.19 ms   budget 150 ms   PASS
-  check_dose (projects a dose)      p50  0.08 ms   p95  0.12 ms   budget 150 ms   PASS
-  find_problems on 500 events       p50 16.41 ms   p95 22.11 ms   budget  50 ms   PASS
-  cold fold on 500 events           p50  0.02 ms   p95  0.02 ms   budget  25 ms   PASS
-```
+`npm run bench` — 300 iterations on the 19-event demo log, 100 on a 500-event log:
+
+| Measurement | p50 | p95 | Budget | Result |
+| --- | --- | --- | --- | --- |
+| `find_problems` (rules only) | 0.06 ms | 0.13 ms | 150 ms | pass |
+| `find_problems` (full tool path) | 0.10 ms | 0.19 ms | 150 ms | pass |
+| `check_dose` (projects a dose) | 0.08 ms | 0.12 ms | 150 ms | pass |
+| `find_problems` on 500 events | 16.41 ms | 22.11 ms | 50 ms | pass |
+| cold fold on 500 events | 0.02 ms | 0.02 ms | 25 ms | pass |
 
 ### Supply chain
 
@@ -363,13 +364,13 @@ have. They are glibc builds, which is why the Docker image is Debian-based.
 ## Development
 
 ```bash
-npm run dev            # server on :8787 and Vite on :5173 — not both on 8787
+npm run dev              # server :8787 + Vite :5173
 npm run verify         # typecheck + lint + tests + coverage gate
-npm run verify-protocol  # PRD §9 checklist; needs the server running
+npm run verify-protocol    # PRD §9; needs the server up
 npm run verify-log       # hash chain; exits 1 if tampered
 npm run bench            # latency budgets
 npm run seed             # re-seed the deterministic log
-scripts/transcript.sh    # replay the demo spine against a running server
+scripts/transcript.sh      # replay the demo spine
 ```
 
 `npm run dev` and `npm start` must not run at the same time — they both want
