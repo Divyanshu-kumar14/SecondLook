@@ -80,6 +80,15 @@ export const config = {
   allowedHostNames,
   devOrigins,
   extraOrigins,
+  /**
+   * PRD §9.2 requires the endpoint to support BOTH `application/json` and
+   * `text/event-stream` responses. The SDK exposes this as a static flag
+   * (`enableJsonResponse`), not per-request negotiation, so both modes are
+   * supported and selectable. Default is SSE, which the demo client and MCP
+   * Inspector both handle; set to `1` for plain JSON, which is friendlier to
+   * minimal third-party clients (plan task P5-7).
+   */
+  jsonResponse: (process.env.SL_MCP_JSON_RESPONSE ?? '0') === '1',
   /** Defaults for the configured port; live lists are built per request. */
   allowedOrigins: originsForPort(port),
 } as const;
