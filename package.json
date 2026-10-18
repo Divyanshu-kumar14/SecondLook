@@ -24,6 +24,7 @@
     "test:watch": "vitest",
     "verify": "npm run typecheck && npm run lint && npm run test:coverage",
     "verify-log": "tsx scripts/verify-log.ts",
+    "verify-protocol": "bash scripts/verify-protocol.sh",
     "seed": "tsx scripts/seed.ts",
     "bench": "tsx scripts/bench.ts"
   },

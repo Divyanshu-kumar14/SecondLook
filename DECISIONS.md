@@ -259,3 +259,101 @@ third-party clients (task P5-7's clip).
 
 **Verified, not asserted.** `scripts/verify-protocol.sh` passes 17/17 in SSE mode and 16/16 in
 JSON mode (the seventeenth is the SSE priming-frame check, correctly not applicable).
+
+## D23 — The dev proxy rewrites the origin rather than the allow-list being widened *(new, Phase 4)*
+**Status: RESOLVED**
+
+`npm run dev` had no `/mcp` proxy, so the client could not reach the server at all. Adding one
+immediately produced a 403 from our own DNS-rebinding defence, because Vite forwarded the dev
+host in the `Origin` header and `http://localhost:5173` was not trusted for a request arriving on
+the MCP port.
+
+There were two ways to make it work: add the dev origin to the server's allow-list, or have the
+proxy present the origin the server already trusts.
+
+**Decision.** `changeOrigin: true`. The allow-list stays derived per request from the live socket
+port, and nothing was added to it for convenience.
+
+**Why.** The 403 was the control working as designed. Relaxing it to make local development
+comfortable would have weakened the one defence PRD §9.6 treats as mandatory, and the relaxation
+would have outlived the need for it. A dev proxy rewriting its own headers is the correct place
+for this concern.
+
+**Cost.** 30 min to find, because the failure looks identical to the first one.
+
+## D24 — The image is Debian, not Alpine, and `.dockerignore` excludes `node_modules` *(new, Phase 5)*
+**Status: RESOLVED**
+
+Alpine is the conventional choice for a small Node image and would have been roughly 60 MB
+smaller. It would also not have worked.
+
+D14 records that the client build pulls two prebuilt platform binaries (Vite's bundler and CSS
+minifier). Those are glibc builds. On Alpine's musl they fail to load, and the build dies with a
+linker error — on a judge machine, from a `docker run`, having followed the README exactly.
+
+**Decision.** `node:22-bookworm-slim`. Pin the libc the demo was actually verified on.
+
+Second half of the decision: `.dockerignore` excludes `node_modules/`. Without that, `docker build`
+would copy the host's warmed module tree into the image and the build would succeed regardless of
+whether the lockfile works — P5-1 would pass while proving nothing, which is the specific failure
+mode the task exists to catch.
+
+**Verified, not asserted.** A production-only install (`npm ci --omit=dev`, 100 packages against
+290 for the full dev tree) boots, seeds the same 19 events with the same `sha256 0dc4f804…`, serves
+the client and answers `find_problems` with the same three findings. No server module imports a
+dev dependency at runtime.
+
+**Known limit.** Docker itself was unavailable on the build machine (the socket is `root:docker`
+and adding the group needs `sudo`). The Dockerfile is therefore unexecuted. What *was* verified is
+the part that would fail: the clean-clone path and the production-only runtime, both run end to
+end.
+
+## D25 — The hash chain verifies stored bytes, not the schema's projection of them *(new, Phase 5)*
+**Status: RESOLVED**
+
+`verify()` hashed the event as returned by `EventSchema.safeParse`. Zod objects strip unknown keys
+by default, so a field injected into a stored line was discarded before hashing and the chain
+reported the log intact.
+
+**Decision.** Keep each line as `JSON.parse` produced it, and hash that. Read `seq`, `prevHash`
+and `hash` off the stored record rather than the parsed copy. `computeHash` keeps its typed
+signature for the write path, because widening it to `unknown` would trade a real guarantee at
+every write site for nothing; a separate one-line helper hashes the untyped record.
+
+**Why this matters more than the bug.** The product's central claim is that the log is
+tamper-evident, and the verifier's own output said "an edit to any byte changes that event hash".
+That sentence was false. This is the same failure the product is designed to prevent — a
+confident answer that the record does not support — appearing in the tool meant to detect it.
+
+**Verified, not asserted.** Three tamper cases on a clean-clone log: editing `ts` exits 1 naming
+event 5; injecting `notes` and `extra` exits 1 naming the fields; reordering keys exits 0, because
+canonical JSON sorts and no meaning changes. The key regression test was confirmed to fail against
+the previous `log.ts`.
+
+**Stated limit.** This detects edits. It does not stop anyone who can rewrite the entire file from
+recomputing every hash, because a chain with no signature attests to integrity, not authorship.
+Signing is out of scope for a local demo log and is not claimed anywhere.
+
+## D26 — Tailwind v4 and Motion, chosen over CSS-only motion *(new, Phase 4 polish)*
+**Status: RESOLVED**
+
+Offered CSS-only motion (zero new dependencies), Motion alone, or Motion plus Tailwind. The third
+was chosen knowingly, mid-hackathon, against a verified build.
+
+**Decision.** Take it, and pay the cost explicitly rather than discovering it later.
+
+**Cost, stated.** The client bundle went from 533 kB to 676 kB (206 kB gzipped); Motion is roughly
+45 kB gzipped of that. The client ships the MCP SDK to the browser either way, and calling the
+protocol properly is worth more to this submission than a smaller bundle.
+
+**Guardrails that came with the choice.** Motion is set to `reducedMotion="user"` at the root and
+a CSS layer kills everything else, because either layer can be bypassed and P4-10 makes that
+Tier-0. Motion was used for **one** authored moment — a new turn arriving, and findings resolving
+in severity order — rather than as a scatter of effects, on the reasoning that motion competing
+with a finding is motion that hides it.
+
+**Bounded by evidence.** The design detector flagged one item on the first pass: a coloured
+`border-left` on the turn cards, which it names as the most recognisable tell of a generated
+interface. It was decoration — the speaker was already labelled — so the edge was removed and
+surface does the work. Detection was re-run after updating Impeccable from v4.2.0 to v4.6.0,
+because a pass under the old rules is not a pass under the new ones.

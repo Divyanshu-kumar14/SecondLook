@@ -360,3 +360,81 @@ runtime, because the import was written as a value import for what is purely a t
 harness's helpers lived in the scenario module; the bench now defines its own scaffolding.
 **Cost.** 5 min.
 **Would we do it differently.** Would check where a helper is actually exported before importing it.
+
+### F28 · The evidence drawer said "0 records" while every layer tested green · P4-4 · RESOLVED
+**What happened.** With three findings on screen, each drawer offered to show its evidence and
+then displayed nothing. The button label read "Show the 0 records behind this".
+**Why it happened.** Findings and their evidence were fetched in separate tool calls and merged
+in `App.tsx` by looking up `evidenceByFinding[finding.findingId]`. The keys were written from
+one turn and read from another, so a finding whose evidence call had not yet resolved matched
+nothing — and `items.length === 0` was indistinguishable from "not loaded yet" and from "load
+failed".
+**How we found it.** A human, clicking. No test caught it: the rules engine had its own tests,
+the tools had their own tests, and the drawer had a test for rendering a populated list. The bug
+was in the seam between them, which is exactly the seam nobody owns.
+**What we changed.** Evidence now travels with the turn that produced the finding, and the drawer
+has three distinct states — loading, loaded, failed — instead of collapsing "no evidence yet",
+"no evidence" and "evidence failed" into one.
+**Cost.** 45 min.
+**Would we do it differently.** Would treat "empty" as a smell in a UI and ask what is missing,
+rather than reading it as a legitimate state.
+
+### F29 · `npm run dev` served no proxy, and adding one hit our own DNS-rebinding 403 · P4-T0 · RESOLVED
+**What happened.** Two failures in one afternoon. First, Vite had no `/mcp` proxy at all, so the
+client could not reach the server in dev. Second, once the proxy existed, every request came back
+403 — the server was correctly refusing an `Origin` it did not trust, because the proxy forwarded
+the dev host unchanged.
+**Why it happened.** The dev server was never exercised against the real transport until the
+client work began. And the 403 was the security control working exactly as designed: the
+allow-list is derived per request from the live socket port, not from a configured port.
+**How we found it.** Clicking through in dev.
+**What we changed.** `changeOrigin: true` on the proxy, so the upstream sees the origin it
+already trusts. Recorded as **D23**. The 403 was not weakened and the allow-list was not widened.
+**Cost.** 30 min.
+**Would we do it differently.** Would write the dev proxy in Phase 0, when the transport landed,
+instead of discovering the gap when the UI needed it.
+
+### F30 · `verify-log` blessed injected fields — the chain verified the schema, not the file · P1-3 · RESOLVED
+**What happened.** Running the DoD #5 tamper check for real, rather than assuming it had been run
+before, showed that editing a known field failed correctly (exit 1, event 5 named) but injecting
+an unknown field — `notes`, `extra` — verified clean and exited 0.
+**Why it happened.** `#load()` ran every line through `EventSchema.safeParse`. `EventSchema` is a
+Zod object, and Zod **strips unknown keys** by default. `verify()` then hashed the *parsed*
+event, so an injected key was discarded before hashing and the chain never saw it. The script's
+own message — "an edit to any byte changes that event hash and every hash after it" — was false.
+**How we found it.** Actually performing the tamper during P5-1. The three existing tamper tests
+covered a payload byte, a deletion and a corrupt line; none of them added a field.
+**What we changed.** Each line is now kept as `JSON.parse` produced it and that is what gets
+hashed. Chain links are read from the stored record too. `verify()` names stray fields rather than
+reporting only a hash mismatch. Three tests added, and the key one was confirmed to **fail
+against the previous `log.ts`** before being confirmed to pass against the new one.
+**Cost.** 50 min.
+**Would we do it differently.** Would have written the test as "inject an unknown field" from the
+start. Testing only edits to fields the schema already knows tests the schema's own guarantees,
+not the file's.
+
+### F31 · `npm run verify-protocol` was documented in the plan but did not exist · P3-9 · RESOLVED
+**What happened.** Running the verification command the plan names for the §9 protocol checklist
+produced no output at all — the script had never been added to `package.json`.
+**Why it happened.** The script was written and run by path (`bash scripts/verify-protocol.sh`)
+during P3-9, and the npm script was never added. The plan's verification matrix and P3-9 both
+say `npm run verify-protocol`.
+**How we found it.** P5-1, while gathering DoD evidence from a clean clone.
+**What we changed.** Added the script to `package.json`. It stays out of `npm run verify` because
+it needs a running server, which `verify` deliberately does not assume.
+**Cost.** 5 min.
+**Would we do it differently.** Would treat every command named in a verification matrix as an
+artefact that has to exist, and check them in one pass at the end of each phase.
+
+### F32 · The README claimed 146 tests when there were 202 · P5-4 · RESOLVED
+**What happened.** Re-running the gate during P5-1 showed a stale count in the README's
+verification section: `npm test # 146 tests`. The real number was 202 across 13 files.
+**Why it happened.** The stat was accurate when written in Phase 2 and was never refreshed as
+tests accumulated.
+**How we found it.** Running the command and comparing its output to the number in the file —
+which is the only way to check a stat.
+**What we changed.** Updated to the live figure. Worth stating plainly: a stale number in the
+submission's front door is the same class of error this project exists to catch, and it survived
+four phases because nobody re-read the README against a running command.
+**Cost.** 5 min.
+**Would we do it differently.** Would treat any number in the README as generated, not typed.
