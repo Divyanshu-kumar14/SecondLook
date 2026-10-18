@@ -25,6 +25,7 @@
     "verify": "npm run typecheck && npm run lint && npm run test:coverage",
     "verify-log": "tsx scripts/verify-log.ts",
     "verify-protocol": "bash scripts/verify-protocol.sh",
+    "verify-ui": "tsx scripts/ui-check.ts",
     "seed": "tsx scripts/seed.ts",
     "bench": "tsx scripts/bench.ts"
   },
@@ -46,6 +47,7 @@
     "concurrently": "9.2.5",
     "eslint": "10.13.0",
     "globals": "17.13.0",
+    "playwright-core": "^1.64.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "tailwindcss": "^4.3.3",
