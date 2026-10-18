@@ -132,6 +132,56 @@ describe('P1-3 · verify detects tampering', () => {
     writeFileSync(file, '{"not":"an event"}\n');
     expect(() => EventLog.open(file, 'persist')).toThrow(/Corrupt event log/);
   });
+
+  // F29. `EventSchema` is a Zod object and strips unknown keys, so hashing the
+  // PARSED event let an injected field pass the chain untouched. This is the
+  // test that was missing when the hole was found.
+  it('fails when an unknown field is injected into a stored event', () => {
+    const log = EventLog.open(file, 'demo');
+    log.append([dose(500, '2026-10-16T08:00:00.000Z'), dose(500, '2026-10-16T12:00:00.000Z')]);
+    const lines = readFileSync(file, 'utf8').trim().split('\n');
+    const record = JSON.parse(lines[1]!) as Record<string, unknown>;
+    record['notes'] = 'TAMPERED';
+    lines[1] = JSON.stringify(record);
+    writeFileSync(file, lines.join('\n') + '\n');
+
+    const result = EventLog.open(file, 'persist').verify();
+    expect(result.ok).toBe(false);
+    expect(result.failedAt).toBe(1);
+    expect(result.reason).toMatch(/unexpected field\(s\).*notes/);
+  });
+
+  // Guards the fix against over-correcting: reordering keys changes no meaning
+  // and no hash, so it must still verify clean.
+  it('still passes when a stored event is re-serialised with reordered keys', () => {
+    const log = EventLog.open(file, 'demo');
+    log.append([dose(500, '2026-10-16T08:00:00.000Z'), dose(500, '2026-10-16T12:00:00.000Z')]);
+    const lines = readFileSync(file, 'utf8').trim().split('\n');
+    const record = JSON.parse(lines[1]!) as Record<string, unknown>;
+    const reordered: Record<string, unknown> = {};
+    for (const key of Object.keys(record).reverse()) reordered[key] = record[key];
+    lines[1] = JSON.stringify(reordered);
+    writeFileSync(file, lines.join('\n') + '\n');
+
+    expect(EventLog.open(file, 'persist').verify().ok).toBe(true);
+  });
+
+  // The chain links must be read from the stored record too, not from the
+  // parsed copy — otherwise a rewritten `prevHash` would be compared against
+  // the value the schema happened to accept.
+  it('fails when prevHash is rewritten on a stored event', () => {
+    const log = EventLog.open(file, 'demo');
+    log.append([dose(500, '2026-10-16T08:00:00.000Z'), dose(500, '2026-10-16T12:00:00.000Z')]);
+    const lines = readFileSync(file, 'utf8').trim().split('\n');
+    const record = JSON.parse(lines[1]!) as Record<string, unknown>;
+    record['prevHash'] = GENESIS_HASH;
+    lines[1] = JSON.stringify(record);
+    writeFileSync(file, lines.join('\n') + '\n');
+
+    const result = EventLog.open(file, 'persist').verify();
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/prevHash mismatch/);
+  });
 });
 
 describe('P1-1 determinism', () => {

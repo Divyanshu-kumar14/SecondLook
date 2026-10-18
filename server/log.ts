@@ -51,6 +51,19 @@ export function computeHash(prevHash: string, body: EventBodyForHash): string {
   return createHash('sha256').update(prevHash + canonicalJson(body)).digest('hex');
 }
 
+/**
+ * Hash of a record exactly as it was read off disk.
+ *
+ * Deliberately separate from `computeHash` rather than widening it to
+ * `unknown`. Every write path constructs a typed `EventBodyForHash`, and that
+ * type is worth keeping. This one takes whatever `JSON.parse` produced, because
+ * the verifier's job is to attest to the bytes that exist — not to the schema's
+ * opinion of them.
+ */
+function hashStoredRecord(prevHash: string, record: Record<string, unknown>): string {
+  return createHash('sha256').update(prevHash + canonicalJson(record)).digest('hex');
+}
+
 export interface NewEventInput {
   type: EventType;
   payload: unknown;
@@ -81,6 +94,15 @@ export class EventLog {
   readonly #file: string;
   #events: CareEvent[] = [];
   #frozen: readonly CareEvent[] = Object.freeze([]);
+  /**
+   * Each line as `JSON.parse` produced it, before `EventSchema` had a chance to
+   * strip anything.
+   *
+   * `verify()` hashes THIS, not `#events`. Zod strips unknown keys, so hashing
+   * the parsed event would let an injected field pass the chain untouched —
+   * which is exactly what the log claims it cannot do. See `verify()`.
+   */
+  #stored: Record<string, unknown>[] = [];
 
   private constructor(file: string) {
     this.#file = file;
@@ -109,18 +131,22 @@ export class EventLog {
   #load(): void {
     const raw = readFileSync(this.#file, 'utf8');
     const events: CareEvent[] = [];
+    const stored: Record<string, unknown>[] = [];
     for (const line of raw.split('\n')) {
       const trimmed = line.trim();
       if (trimmed === '') continue;
-      const parsed = EventSchema.safeParse(JSON.parse(trimmed));
+      const value: unknown = JSON.parse(trimmed);
+      const parsed = EventSchema.safeParse(value);
       if (!parsed.success) {
         throw new Error(
           `Corrupt event log at line ${events.length + 1}: ${parsed.error.message}`,
         );
       }
       events.push(parsed.data);
+      stored.push(value as Record<string, unknown>);
     }
     this.#events = events;
+    this.#stored = stored;
     this.#frozen = Object.freeze([...events]);
   }
 
@@ -167,6 +193,9 @@ export class EventLog {
       const event: CareEvent = EventSchema.parse({ ...body, hash: computeHash(prevHash, body) });
       appended.push(event);
       this.#events.push(event);
+      // We wrote exactly these keys, so the stored record is the event itself.
+      // Kept in step with `#events` so `verify()` always has something to hash.
+      this.#stored.push({ ...event });
       prevHash = event.hash;
       seq += 1;
     }
@@ -179,23 +208,64 @@ export class EventLog {
   /**
    * Recompute the whole chain. Returns the index of the first divergence, so
    * `npm run verify-log` can report *where* the log was tampered with.
+   *
+   * Hashes the record AS STORED, not the schema-parsed event. This is the whole
+   * point of the function: `EventSchema` is a Zod object and therefore strips
+   * unknown keys, so hashing its output would quietly bless any field injected
+   * into a line. That was a real hole — `notes`/`extra` added to event 6 of the
+   * demo log verified clean until this was fixed (FRICTION_LOG F29).
+   *
+   * Honest limit: this detects edits. It does not stop an attacker who can
+   * rewrite the entire file from recomputing every hash, because a hash chain
+   * with no signature attests to integrity, not to authorship. Signing is out of
+   * scope for a local demo log.
    */
   verify(): VerifyResult {
     let prevHash = GENESIS_HASH;
     for (let i = 0; i < this.#events.length; i += 1) {
       const event = this.#events[i]!;
-      if (event.seq !== i) {
-        return { ok: false, count: this.#events.length, failedAt: i, reason: `seq gap: expected ${i}, got ${event.seq}` };
+      const stored = this.#stored[i];
+      if (stored === undefined) {
+        return { ok: false, count: this.#events.length, failedAt: i, reason: 'no stored record to verify' };
       }
-      if (event.prevHash !== prevHash) {
-        return { ok: false, count: this.#events.length, failedAt: i, reason: `prevHash mismatch: expected ${prevHash.slice(0, 12)}…, got ${event.prevHash.slice(0, 12)}…` };
+
+      // Read the chain links off the stored record so a stripped or rewritten
+      // `seq`/`prevHash` cannot slip past on the parsed copy's say-so.
+      const seq = stored['seq'];
+      const link = stored['prevHash'];
+      const hash = stored['hash'];
+
+      if (typeof seq !== 'number' || seq !== i) {
+        return { ok: false, count: this.#events.length, failedAt: i, reason: `seq gap: expected ${i}, got ${String(seq)}` };
       }
-      const { hash, ...body } = event;
-      const expected = computeHash(prevHash, body);
+      if (typeof link !== 'string') {
+        return { ok: false, count: this.#events.length, failedAt: i, reason: 'prevHash missing or not a string' };
+      }
+      if (link !== prevHash) {
+        return { ok: false, count: this.#events.length, failedAt: i, reason: `prevHash mismatch: expected ${prevHash.slice(0, 12)}…, got ${link.slice(0, 12)}…` };
+      }
+
+      // Name the stray fields when there are any. A bare "hash mismatch" is
+      // correct but opaque; "someone added `notes`" is the actual finding.
+      const known = new Set(Object.keys(event));
+      const injected = Object.keys(stored).filter((key) => !known.has(key));
+      if (injected.length > 0) {
+        return {
+          ok: false,
+          count: this.#events.length,
+          failedAt: i,
+          reason:
+            `unexpected field(s) not in EventSchema: ${injected.join(', ')} — ` +
+            'the stored record is not the record that was hashed',
+        };
+      }
+
+      const { hash: _storedHash, ...body } = stored;
+      const expected = hashStoredRecord(prevHash, body);
       if (expected !== hash) {
-        return { ok: false, count: this.#events.length, failedAt: i, reason: `hash mismatch at event ${i}: expected ${expected.slice(0, 12)}…, got ${hash.slice(0, 12)}…` };
+        return { ok: false, count: this.#events.length, failedAt: i, reason: `hash mismatch at event ${i}: expected ${expected.slice(0, 12)}…, got ${String(hash).slice(0, 12)}…` };
       }
-      prevHash = hash;
+      prevHash = expected;
     }
     return { ok: true, count: this.#events.length, failedAt: -1 };
   }
