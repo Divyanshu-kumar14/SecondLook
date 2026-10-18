@@ -17,7 +17,6 @@ import { findProblemsTool } from '../server/tools/find_problems.js';
 import { checkDose } from '../server/tools/check_dose.js';
 import { guestContext } from '../server/tools/_shared.js';
 import { Store } from '../server/store.js';
-import type { EventType } from '../server/schemas/events.js';
 
 const P95_BUDGET_MS = 150;
 const FIND_PROBLEMS_BUDGET_MS = 50;
@@ -84,7 +83,7 @@ function bigLog(events: number): EventLog {
   for (let i = 0; i < events - BASE.length; i += 1) {
     const medicationId = i % 2 === 0 ? 'med-acetaminophen' : 'med-ibuprofen';
     extra.push({
-      type: 'dose.recorded' as EventType,
+      type: 'dose.recorded',
       payload: { personId: PERSON_ID, medicationId, amountMg: 500 },
       actorId: `caregiver-${i % 3}`,
       actorRole: 'record' as const,
