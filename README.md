@@ -118,7 +118,7 @@ otherwise.
 
 ```bash
 npm run verify      # typecheck + lint + tests + coverage gate
-npm test            # 146 tests
+npm test            # 202 tests across 13 files
 npm test -- --coverage
 ```
 

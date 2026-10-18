@@ -1,0 +1,43 @@
+# Keep the build context minimal and correct.
+#
+# node_modules MUST be ignored: copying the host's modules into the image would
+# defeat the entire point of P5-1, which is to prove the judge's `npm install`
+# works from nothing. Without this, `docker build` would silently ship the
+# warmed host tree and a broken lockfile would never surface.
+
+node_modules/
+dist/
+coverage/
+.data/
+
+# Built by the builder stage from source in the image.
+*.tsbuildinfo
+
+# Local tooling and agent caches — never part of a shipped app.
+.token-optimizer/
+.token-optimiser/
+.opencode/
+.orchestrator/
+
+# Git metadata: not needed to build, and it busts the cache on every commit.
+.git/
+.gitignore
+.github/
+
+# Secrets. .env.example is kept: it is documentation, and it holds no values.
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise.
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Evidence and docs are not needed to RUN the app, but the README is the
+# submission's front door, so it stays. specs/ and tests/ are excluded to keep
+# the context small; neither is needed at runtime.
+tests/
+specs/
