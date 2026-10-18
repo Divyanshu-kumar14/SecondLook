@@ -23,7 +23,8 @@ import {
   type Finding,
 } from './phrase.ts';
 import type { EvidenceItem } from './components/EvidenceDrawer.tsx';
-import { FindingsList, LatencyHud, ProtocolInspector, ToolList } from './components/Panels.tsx';
+import { LatencyHud, ProtocolInspector, ToolList } from './components/Panels.tsx';
+import { RecordPanel, type RecordView } from './components/RecordPanel.tsx';
 import { Crossfade, MotionProvider, Turn } from './motion.tsx';
 
 interface Turn {
@@ -60,6 +61,7 @@ function Console() {
   const [busy, setBusy] = useState(false);
   const [latencies, setLatencies] = useState<number[]>([]);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [view, setView] = useState<RecordView>('findings');
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   // Connect, and reconnect on persona change so the handshake is visible and the
@@ -322,7 +324,7 @@ function Console() {
             aria-live="polite"
             aria-relevant="additions text"
             aria-label="Conversation transcript"
-            className="h-96 overflow-y-auto rounded-card border border-rule bg-card p-4"
+            className="h-[60vh] min-h-72 overflow-y-auto rounded-card border border-rule bg-card p-4 lg:h-96"
           >
             {turns.length === 0 ? (
               <p className="text-sm text-ink-faint">
@@ -362,7 +364,7 @@ function Console() {
           </div>
 
           <form
-            className="mt-3 flex gap-2"
+            className="mt-3 flex flex-col gap-2 sm:flex-row"
             onSubmit={(e) => {
               e.preventDefault();
               void ask(input);
@@ -384,7 +386,7 @@ function Console() {
             <button
               type="submit"
               disabled={busy || !connection || input.trim() === ''}
-              className="rounded-ctl bg-ink px-5 py-2.5 text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-ctl bg-ink px-5 py-2.5 text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
               {busy ? 'Asking…' : 'Ask'}
             </button>
@@ -406,26 +408,15 @@ function Console() {
           </ul>
         </section>
 
-        <aside className="grid gap-8 lg:sticky lg:top-6" aria-label="Details">
-          <section aria-labelledby="findings-heading">
-            <h2
-              id="findings-heading"
-              className="mb-3 text-[0.72rem] font-medium tracking-[0.08em] text-ink-faint uppercase"
-            >
-              Findings
-            </h2>
-            {latestFindingTurn?.findings ? (
-              <FindingsList
-                findings={latestFindingTurn.findings}
-                evidenceByFinding={latestFindingTurn.evidence ?? {}}
-                loading={evidenceLoading}
-              />
-            ) : (
-              <p className="text-sm text-ink-faint">
-                Ask “Are we doing this right?” to see the findings.
-              </p>
-            )}
-          </section>
+        <aside className="grid gap-8 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1" aria-label="Details">
+          <RecordPanel
+            view={view}
+            onViewChange={setView}
+            call={call}
+            findings={latestFindingTurn?.findings}
+            evidenceByFinding={latestFindingTurn?.evidence ?? {}}
+            evidenceLoading={evidenceLoading}
+          />
 
           <section aria-labelledby="latency-heading">
             <h2
