@@ -66,7 +66,7 @@ Pinning TypeScript 7 would break the P0-8 lint gate with an unsatisfiable peer r
 typescript-eslint formally widens its range.
 
 ## D12 — `actorId` in `get_timeline` *(new, Phase 0)*
-**Status: RESOLVED — needs owner confirmation**
+**Status: RESOLVED — owner approved option (a) 18 Oct 2026**
 
 Two source documents conflict:
 
@@ -83,7 +83,14 @@ resolved server-side at write time (PRD §5.4).
 `tests/schema.test.ts` encodes the invariant: no **write** tool may accept `actorId` or
 `actorRole`, and `get_timeline` is asserted to be the sole occurrence and non-mutating.
 
-**Open question for the owner:** confirm this reading, or rename the filter.
+**Owner ruling (18 Oct 2026): option (a), keep the filter.** The decisive argument: the
+parameter cannot escalate privilege, because the caller already has unfiltered access to the
+timeline. It only narrows results. Removing it would buy no security while deleting a
+PRD-specified capability, and renaming it would invent a name the PRD does not use.
+
+`tests/schema.test.ts` encodes this permanently: no **write** tool may accept `actorId` or
+`actorRole`, and `get_timeline` is asserted to be the sole occurrence and non-mutating. If a
+reviewer disagrees, the reversal is one schema line plus one test.
 
 ## D13 — DNS-rebinding allow-lists use the *live* bound port *(new, Phase 0)*
 **Status: RESOLVED**
@@ -119,8 +126,10 @@ only" / "no native compile" and P5-2.
 '*.node'` is reproducible evidence for the README. No DB, crypto or build-from-source
 native module is present (`better-sqlite3`, `bcrypt`, `sharp`, `canvas` all absent).
 
-*If a judge reads the exit criterion literally, the mitigation is pinning Vite 7 (Rollup).*
-Cost: rebuild risk on a deadline. Not taken.
+*Mitigation considered and **declined** (18 Oct 2026): pinning Vite 7 to make the criterion
+literally true. Rejected because it swaps the bundler mid-project, with a rules engine and an
+MCP tool surface still ahead, purely to satisfy a wording technicality that no judge will test
+for by reading `node_modules`. Reproducible evidence is in the README instead.*
 
 ---
 
