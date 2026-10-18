@@ -73,10 +73,21 @@ export function speakFinding(finding: Finding): string {
   const ack = finding.acknowledged ? ' Seen, not fixed.' : '';
 
   const sentence =
-    `${verb}. ${med} ${finding.rules.join(' and ')} — ${action}.` +
+    `${verb}. ${med} ${listWords(finding.rules)} — ${action}.` +
     `${ack}`.trim();
 
   return capWords(sentence);
+}
+
+/**
+ * Render a list the way a person says it: "R3, R4 and R6", never
+ * "R3 and R4 and R6". These strings get spoken aloud in the demo video, so
+ * joining with "and" is a visible defect, not a style preference.
+ */
+export function listWords(items: readonly string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0]!;
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]!}`;
 }
 
 /** Pull the medication out of the server's sentence, for the spoken form. */
@@ -93,7 +104,7 @@ function medicationWord(what: string): string {
 
 /** Spoken form of a `check_dose` verdict. */
 export function speakVerdict(verdict: string, reasons: { ruleId: string }[]): string {
-  const rules = [...new Set(reasons.map((r) => r.ruleId))].join(' and ');
+  const rules = listWords([...new Set(reasons.map((r) => r.ruleId))]);
   switch (verdict) {
     case 'DO_NOT_GIVE':
       return capWords(`Do not give it. ${rules} fired.`);
@@ -113,7 +124,7 @@ export function speakRefusal(whoCan: string): string {
 export function speakRecorded(name: string, flags: { ruleId: string }[]): string {
   const rules = [...new Set(flags.map((f) => f.ruleId))];
   if (rules.length === 0) return capWords(`${name} recorded the dose.`);
-  return capWords(`${name} recorded the dose. It raised ${rules.join(' and ')}.`);
+  return capWords(`${name} recorded the dose. It raised ${listWords(rules)}.`);
 }
 
 /** Spoken form of a clean scan — must never sound like reassurance. */

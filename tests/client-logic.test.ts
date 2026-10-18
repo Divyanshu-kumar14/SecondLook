@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { route, EXAMPLES, type Persona } from '../client/router.js';
 import {
   capWords,
+  listWords,
   MAX_SPOKEN_WORDS,
   speakFinding,
   speakNoFindings,
@@ -46,10 +47,17 @@ describe('P4-2 · utterance router', () => {
     expect(route("Double Robert's acetaminophen", priya).args).toMatchObject({ newFrequency: 4 });
   });
 
-  it('never blocks unrecognised input — it falls through', () => {
+  it('falls through rather than failing, and says so', () => {
     const r = route('the weather is nice today', priya);
     expect(r.matched).toBeNull();
+    // The CLIENT decides not to call a tool when nothing matched; the router
+    // still returns a usable shape rather than throwing.
     expect(r.tool).toBe('find_problems');
+  });
+
+  it('still routes a real question after an unmatched one', () => {
+    route('hello', priya);
+    expect(route('Are we doing this right?', priya).matched).toBe('are-we-doing-this-right');
   });
 
   it('is deterministic — the same words always produce the same call', () => {
@@ -81,6 +89,29 @@ const finding = (over: Partial<Finding> = {}): Finding => ({
   when: '2026-10-15T20:00:00.000Z',
   nextAction: 'STOP_GIVING',
   ...over,
+});
+
+describe('spoken lists read as English, not as joins', () => {
+  it('joins two with "and"', () => {
+    expect(listWords(['R1', 'R2'])).toBe('R1 and R2');
+  });
+
+  it('joins three with a comma then "and" — never "and and and"', () => {
+    expect(listWords(['R3', 'R4', 'R6'])).toBe('R3, R4 and R6');
+  });
+
+  it('handles one and none', () => {
+    expect(listWords(['R5'])).toBe('R5');
+    expect(listWords([])).toBe('');
+  });
+
+  it('reaches the spoken finding sentence', () => {
+    const spoken = speakFinding(finding()); // rules R3, R4
+    expect(spoken).toMatch(/R3 and R4/);
+    const many = speakFinding(finding({ rules: ['R1', 'R2', 'R3'] }));
+    expect(many).toMatch(/R1, R2 and R3/);
+    expect(many).not.toMatch(/and R1 and/);
+  });
 });
 
 describe('P4-3 · phrasing layer', () => {

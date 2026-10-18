@@ -30,9 +30,23 @@ function provenanceLine(item: EvidenceItem): string {
   return `recorded by ${who}, from ${where}`;
 }
 
-export function EvidenceDrawer({ evidence }: { evidence: EvidenceItem[] }) {
+export function EvidenceDrawer({
+  items,
+  loading,
+  failed,
+}: {
+  items: EvidenceItem[];
+  loading?: boolean;
+  failed?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
+
+  const label = loading
+    ? 'Looking up the records…'
+    : failed
+      ? 'No records could be loaded'
+      : `Show the ${items.length} record${items.length === 1 ? '' : 's'} behind this`;
 
   return (
     <div className="drawer">
@@ -41,18 +55,21 @@ export function EvidenceDrawer({ evidence }: { evidence: EvidenceItem[] }) {
         className="drawer-toggle"
         aria-expanded={open}
         aria-controls={panelId}
+        aria-busy={loading === true}
+        disabled={loading === true}
         onClick={() => setOpen((v) => !v)}
       >
-        {open ? 'Hide' : 'Show'} the {evidence.length} record
-        {evidence.length === 1 ? '' : 's'} behind this
+        {open ? 'Hide' : label}
       </button>
 
       <div id={panelId} hidden={!open} className="drawer-panel">
-        {evidence.length === 0 ? (
-          <p className="muted">No records attached.</p>
+        {items.length === 0 ? (
+          <p className="muted">
+            {loading ? 'Still loading…' : 'The records for this finding could not be loaded.'}
+          </p>
         ) : (
           <ol className="evidence-list">
-            {evidence.map((item) => (
+            {items.map((item) => (
               <li key={item.eventId}>
                 <span className="evidence-summary">
                   {item.summary ?? item.type ?? 'event'}

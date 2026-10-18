@@ -15,35 +15,45 @@ const SEVERITY_LABEL: Record<Finding['severity'], string> = {
 export function FindingsList({
   findings,
   evidenceByFinding,
+  loading,
 }: {
   findings: Finding[];
   evidenceByFinding: Record<string, EvidenceItem[]>;
+  loading?: boolean;
 }) {
   if (findings.length === 0) {
     return <p className="muted">Nothing was found in the records read.</p>;
   }
   return (
     <ol className="findings">
-      {findings.map((finding, index) => (
-        <li key={finding.findingId} className={`finding sev-${finding.severity}`}>
-          <div className="finding-head">
-            <span className="finding-index" aria-hidden="true">
-              {index + 1}
-            </span>
-            <h3>{finding.what}</h3>
-          </div>
-          <p className="finding-meta">
-            <span className={`pill pill-${finding.severity}`}>
-              {SEVERITY_LABEL[finding.severity]}
-            </span>
-            <span className="pill pill-quiet">{finding.rules.join(' + ')}</span>
-            {finding.acknowledged ? (
-              <span className="pill pill-ack">Seen, not fixed</span>
-            ) : null}
-          </p>
-          <EvidenceDrawer evidence={evidenceByFinding[finding.findingId] ?? []} />
-        </li>
-      ))}
+      {findings.map((finding, index) => {
+        const has = Object.prototype.hasOwnProperty.call(evidenceByFinding, finding.findingId);
+        const items = evidenceByFinding[finding.findingId] ?? [];
+        return (
+          <li key={finding.findingId} className={`finding sev-${finding.severity}`}>
+            <div className="finding-head">
+              <span className="finding-index" aria-hidden="true">
+                {index + 1}
+              </span>
+              <h3>{finding.what}</h3>
+            </div>
+            <p className="finding-meta">
+              <span className={`pill pill-${finding.severity}`}>
+                {SEVERITY_LABEL[finding.severity]}
+              </span>
+              <span className="pill pill-quiet">{finding.rules.join(' + ')}</span>
+              {finding.acknowledged ? (
+                <span className="pill pill-ack">Seen, not fixed</span>
+              ) : null}
+            </p>
+            <EvidenceDrawer
+              items={items}
+              loading={loading === true && !has}
+              failed={has && items.length === 0}
+            />
+          </li>
+        );
+      })}
     </ol>
   );
 }

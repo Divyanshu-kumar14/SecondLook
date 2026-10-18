@@ -90,20 +90,32 @@ export function App() {
     [connection],
   );
 
-  /** Fetch the records behind each finding so the drawer can cite real ids. */
+  /**
+   * Fetch the records behind each finding so the drawer can cite real ids.
+   * Runs in parallel — sequential calls made the panel look empty for seconds.
+   * Failures are surfaced rather than silently becoming "0 records", which is
+   * exactly the kind of empty result this whole project refuses to present as
+   * reassurance.
+   */
   const loadEvidence = useCallback(
     async (findings: Finding[]): Promise<Record<string, EvidenceItem[]>> => {
-      const out: Record<string, EvidenceItem[]> = {};
-      for (const finding of findings.slice(0, 3)) {
-        try {
-          const r = await call('explain_problem', { findingId: finding.findingId });
-          const detail = (r.structured.evidenceDetail ?? []) as EvidenceItem[];
-          out[finding.findingId] = detail;
-        } catch {
-          out[finding.findingId] = [];
-        }
-      }
-      return out;
+      const results = await Promise.all(
+        findings.map(async (finding) => {
+          try {
+            const r = await call('explain_problem', { findingId: finding.findingId });
+            const detail = r.structured.evidenceDetail;
+            if (!Array.isArray(detail)) {
+              return [finding.findingId, []] as const;
+            }
+            return [finding.findingId, detail as EvidenceItem[]] as const;
+          } catch {
+            return [finding.findingId, []] as const;
+          }
+        }),
+      );
+      const merged: Record<string, EvidenceItem[]> = {};
+      for (const [id, items] of results) merged[id] = [...items];
+      return merged;
     },
     [call],
   );
@@ -117,6 +129,22 @@ export function App() {
       push({ who: 'you', utterance, spoken: '', tool: undefined });
 
       const routed = route(utterance, persona);
+
+      // An unrecognised utterance does NOT silently become a different question.
+      // Falling through to the headline check answered something nobody asked —
+      // the same category of dishonesty as reporting no findings when none were
+      // looked for. Ask instead, and say what is possible.
+      if (routed.matched === null) {
+        push({
+          who: 'system',
+          spoken:
+            'I did not catch that as something I can check. Try one of the example phrases below, or type what you would like to know.',
+          note: 'Simulated NLU matched no pattern, so no tool was called.',
+        });
+        setBusy(false);
+        return;
+      }
+
       try {
         const r = await call(routed.tool, routed.args);
         const s = r.structured;
@@ -128,6 +156,7 @@ export function App() {
             findings.length > 0
               ? findings.map((f) => speakFinding(f)).join(' ')
               : speakNoFindings(coverage.scannedEvents ?? 0, coverage.unloggedExpectedDoses ?? 0);
+          setEvidenceLoading(true);
           push({
             who: 'system',
             spoken,
@@ -135,10 +164,7 @@ export function App() {
             ms: r.ms,
             findings,
             evidence: await loadEvidence(findings),
-            note:
-              routed.matched === null
-                ? 'No pattern matched, so this fell through to the headline check.'
-                : `Simulated NLU matched “${routed.matched}”.`,
+            note: `Simulated NLU matched “${routed.matched}”.`,
           });
         } else if (routed.tool === 'check_dose') {
           push({
@@ -206,12 +232,18 @@ export function App() {
         });
       } finally {
         setBusy(false);
+        setEvidenceLoading(false);
       }
     },
     [call, connection, loadEvidence, persona, push],
   );
 
-  const latestFindings = [...turns].reverse().find((t) => t.findings)?.findings;
+  // Findings and their evidence must come from the SAME turn. Deriving them
+  // from two independent searches let the panel show one turn's findings beside
+  // another turn's evidence.
+  const latestFindingTurn = [...turns].reverse().find((t) => t.findings);
+  const latestFindings = latestFindingTurn?.findings;
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
 
   return (
     <div className="app">
@@ -322,9 +354,8 @@ export function App() {
             {latestFindings ? (
               <FindingsList
                 findings={latestFindings}
-                evidenceByFinding={
-                  [...turns].reverse().find((t) => t.findings)?.evidence ?? {}
-                }
+                evidenceByFinding={latestFindingTurn?.evidence ?? {}}
+                loading={evidenceLoading}
               />
             ) : (
               <p className="muted">Ask “Are we doing this right?” to see the findings.</p>
