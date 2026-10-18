@@ -303,3 +303,60 @@ reasoning as well as the value, so it cannot later pass for the wrong reason.
 **Cost.** 5 min.
 **Would we do it differently.** No, but it is worth a line in the README: the oldest evidence
 wins, and that is a feature, not a bug.
+
+---
+
+## Phase 3 — MCP tool surface (Sun 18 Oct 2026)
+
+### F24 · A placeholder event id leaked into customer-facing output · P3-3 · RESOLVED
+**What happened.** `check_dose` answers with `reasons[].evidence`, and those arrays contained the
+literal string `"hypothetical"` — the placeholder id of the projected dose.
+**Why it happened.** The dry run projects a fake dose onto a copy of the events and runs the
+real rules over it. The rules faithfully cite whatever evidence they were given, including the
+phantom.
+**How we found it.** Reading the live transcript from `scripts/transcript.sh`, not a test — the
+tests passed, because nothing asserted the evidence was real.
+**What we changed.** The projected dose is the SUBJECT of the question, not evidence for it, so
+its id is stripped from every evidence array before the result is returned. Added two tests:
+one asserts the placeholder never appears in the response, the other asserts every cited id is a
+real event that exists in the log.
+**Cost.** 10 min.
+**Would we do it differently.** Yes — assert evidence resolvability from the start. "Every id I
+return can be looked up" is a property, not an afterthought.
+
+### F25 · The SDK answers before our handler ever runs · P3-7 · RESOLVED (documented)
+**What happened.** `find_problems` with `{}` returned `isError: true` but **no
+`structuredContent`**, so it did not match the PRD's required structured error shape. The test
+asserting the structured shape failed.
+**Why it happened.** The SDK validates against `inputSchema` before invoking the handler. Our
+`INVALID_INPUT` branch is a backstop, not the first line of defence.
+**How we found it.** A failing contract test, then a probe printing the exact SDK response.
+**What we changed.** Kept strict schemas on purpose and recorded the trade as **D21**, with
+both paths now asserted separately: schema failures are graceful and name the field; domain
+failures carry the full structured payload.
+**Cost.** 20 min.
+**Would we do it differently.** Would confirm SDK callback ordering before designing the error
+contract around it.
+
+### F26 · Discriminated-union narrowing stops working through an alias · P3-2 · RESOLVED
+**What happened.** `const p = event.payload` outside a `switch (event.type)` produced fourteen
+`restrict-template-expressions` errors, because narrowing on `event.type` narrows the `event`
+binding and not a copy of its property.
+**Why it happened.** I hoisted the payload into a local for readability, which quietly discarded
+the narrowing the envelope's type was giving me for free.
+**How we found it.** ESLint, after the same rule had already caught seventeen dead casts in
+Phase 2.
+**What we changed.** Referenced `event.payload` inside each case branch. This is the same lesson
+as Phase 2 F14, arriving again — which is a sign the rule is worth keeping strict.
+**Cost.** 8 min.
+**Would we do it differently.** Would not alias a discriminated member out of its discriminant.
+
+### F27 · `import { EventType }` — a type imported as a value · P3-12 · RESOLVED
+**What happened.** `scripts/bench.ts` threw `does not provide an export named 'EventType'` at
+runtime, because the import was written as a value import for what is purely a type.
+**Why it happened.** Autocomplete default.
+**How we found it.** Running the benchmark.
+**What we changed.** `import type`. Two further import errors followed from assuming the test
+harness's helpers lived in the scenario module; the bench now defines its own scaffolding.
+**Cost.** 5 min.
+**Would we do it differently.** Would check where a helper is actually exported before importing it.

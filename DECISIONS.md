@@ -213,3 +213,49 @@ discontinue would make the id change if the plan constraint were ever re-asserte
 
 **Note for the README.** "The oldest evidence wins" is a feature: it is why an acknowledged
 finding cannot be renamed by new evidence.
+
+---
+
+## D21 — The SDK pre-validates tool arguments, so malformed-input errors are not ours *(new, Phase 3)*
+**Status: RESOLVED — documented deviation**
+
+P3-7 / PRD §8 require that failures return `isError: true` **with the structured payload**
+`{code, message, missingFields[], suggestedFollowUp[]}`.
+
+Measured behaviour of `@modelcontextprotocol/sdk@1.32.1`: the SDK validates arguments against
+the tool's `inputSchema` **before** the handler is invoked. Calling `find_problems` with `{}`
+returns:
+
+```
+isError           : true
+structuredContent : undefined
+content           : [{"type":"text","text":"MCP error -32602: Input validation error:
+                     Invalid arguments for tool find_problems: Invalid input:
+                     expected string, received undefined at personId"}]
+```
+
+**Decision — keep strict schemas.** Weakening them (making every field `.optional()`) would
+make the handler the first line of validation and buy uniform error shape, but it would strip
+`required` from `tools/list`. `required` is what a client reads to know what to send, so the
+schema is the more valuable contract.
+
+Consequence, stated plainly: our structured error shape applies to **domain** failures
+(`UNKNOWN_MEDICATION`, `UNKNOWN_FINDING`, `INVALID_INPUT` reaching the handler), while
+**schema** failures return the SDK's own well-formed `isError` message naming the offending
+field. Both are graceful; neither leaks a stack trace. Both paths are asserted in
+`tests/tools.test.ts`.
+
+## D22 — Both MCP response modes are supported and selectable *(new, Phase 3)*
+**Status: RESOLVED**
+
+PRD §9.2 requires the endpoint to respond with `application/json` **or** `text/event-stream`
+and to support both. The SDK exposes this as a **static** constructor flag
+(`enableJsonResponse`), not per-request negotiation, so "support both" means supporting both
+*configurations*.
+
+**Decision.** Default to SSE, because that is what the demo client and MCP Inspector both
+handle. Expose `SL_MCP_JSON_RESPONSE=1` for plain JSON, which is friendlier to minimal
+third-party clients (task P5-7's clip).
+
+**Verified, not asserted.** `scripts/verify-protocol.sh` passes 17/17 in SSE mode and 16/16 in
+JSON mode (the seventeenth is the SSE priming-frame check, correctly not applicable).
