@@ -9,7 +9,9 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { EventLog } from '../server/log.js';
-import { buildAcknowledgements, buildScenario } from './scenario.js';
+import { fold } from '../server/fold.js';
+import { findProblems } from '../server/rules/index.js';
+import { ACKNOWLEDGEMENTS, AS_OF, buildAcknowledgements, buildScenario } from './scenario.js';
 
 export interface SeedResult {
   log: EventLog;
@@ -20,18 +22,24 @@ export interface SeedResult {
 export function seedDemoLog(file: string): SeedResult {
   // `demo` truncates first, so this is always a clean deterministic build.
   const log = EventLog.open(file, 'demo');
-  const written = log.append(buildScenario());
+  log.append(buildScenario());
 
-  // Second pass: acknowledgements must name the finding they acknowledge, and
-  // the finding id depends on real anchor event ids already in the chain (D3).
-  const refusal = written.find((e) => e.type === 'authority.change_refused');
-  const firstAcetaminophenDose = written.find(
-    (e) => e.type === 'dose.recorded' && e.payload.medicationId === 'med-acetaminophen',
-  );
-  if (!refusal || !firstAcetaminophenDose) {
-    throw new Error('Seed aborted: could not locate the anchor events for acknowledgements.');
-  }
-  log.append(buildAcknowledgements(refusal.eventId, firstAcetaminophenDose.eventId));
+  // Second pass: acknowledgements must name the finding they acknowledge.
+  // Grouping merges rules per medication (PRD §6.5), so the ids are resolved
+  // by running the real engine rather than hard-coded — an acknowledgement
+  // built from a guessed rule set would silently never match (D3).
+  const findings = findProblems(fold(log.all()), AS_OF);
+  const targets = ACKNOWLEDGEMENTS.map((plan) => {
+    const finding = findings.find((f) => f.rules.includes(plan.requiresRule));
+    if (!finding) {
+      throw new Error(
+        `Seed aborted: no finding contains rule ${plan.requiresRule}, so the ` +
+          `acknowledgement scheduled at ${plan.ts} would dangle.`,
+      );
+    }
+    return { findingId: finding.findingId, ts: plan.ts };
+  });
+  log.append(buildAcknowledgements(targets));
 
   const result = log.verify();
   if (!result.ok) {

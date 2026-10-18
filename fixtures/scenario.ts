@@ -11,7 +11,6 @@
  * `asOf`; they never read the wall clock.
  */
 import type { NewEventInput } from '../server/log.js';
-import { findingIdFor } from '../server/finding-id.js';
 
 export const PERSON_ID = 'person-robert';
 export const AS_OF = '2026-10-18T18:00:00.000Z'; // Day 8, 18:00
@@ -248,38 +247,48 @@ export function buildScenario(): NewEventInput[] {
 }
 
 /**
- * Second pass. `refusalEventId` is the anchor for the R5 finding and
- * `doseAnchorEventId` the anchor for the R1 finding — both read from the log
- * that has already been written, so the ids are always real.
+ * What Priya acknowledges, and when.
+ *
+ * The finding ids are NOT hard-coded here. Grouping merges R1 and R2 into a
+ * single finding per medication (PRD §6.5), so a hard-coded `['R1']` id would
+ * never match what the engine actually produces. `seedDemoLog` resolves each
+ * plan to the real finding that contains the named rule.
+ */
+export interface AcknowledgementPlan {
+  /** The rule that must be present in the finding being acknowledged. */
+  requiresRule: string;
+  ts: string;
+}
+
+export const ACKNOWLEDGEMENTS: readonly AcknowledgementPlan[] = Object.freeze([
+  // Day 4: Elena's refused regimen change.
+  { requiresRule: 'R5', ts: DAY(4, '09:10') },
+  // Day 6: the acetaminophen doses four hours apart.
+  { requiresRule: 'R1', ts: DAY(6, '13:00') },
+]);
+
+export interface AcknowledgementTarget {
+  findingId: string;
+  ts: string;
+}
+
+/**
+ * Second pass. `targets` carry the REAL finding ids read back from the engine,
+ * so an acknowledgement can never dangle (D3).
  */
 export function buildAcknowledgements(
-  refusalEventId: string,
-  doseAnchorEventId: string,
+  targets: readonly AcknowledgementTarget[],
 ): NewEventInput[] {
-  return [
-    {
-      type: 'problem.acknowledged',
-      payload: {
-        personId: PERSON_ID,
-        findingId: findingIdFor(ACETAMINOPHEN_ID, ['R5'], refusalEventId),
-        acknowledgedById: PRIYA,
-      },
-      actorId: PRIYA,
-      actorRole: 'full',
-      source: 'caregiver',
-      ts: DAY(4, '09:10'),
+  return targets.map((target) => ({
+    type: 'problem.acknowledged' as const,
+    payload: {
+      personId: PERSON_ID,
+      findingId: target.findingId,
+      acknowledgedById: PRIYA,
     },
-    {
-      type: 'problem.acknowledged',
-      payload: {
-        personId: PERSON_ID,
-        findingId: findingIdFor(ACETAMINOPHEN_ID, ['R1'], doseAnchorEventId),
-        acknowledgedById: PRIYA,
-      },
-      actorId: PRIYA,
-      actorRole: 'full',
-      source: 'caregiver',
-      ts: DAY(6, '13:00'),
-    },
-  ];
+    actorId: PRIYA,
+    actorRole: 'full' as const,
+    source: 'caregiver' as const,
+    ts: target.ts,
+  }));
 }
