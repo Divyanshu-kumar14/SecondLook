@@ -1,0 +1,53 @@
+{
+  "name": "secondlook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Household Care Reconciliation for Alexa+",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "npm run build:node && npm run build:client",
+    "build:node": "tsc -p tsconfig.build.json",
+    "build:client": "vite build",
+    "start": "node dist/node/server/index.js",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "vite",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "verify-log": "tsx scripts/verify-log.ts",
+    "seed": "tsx scripts/seed.ts",
+    "bench": "tsx scripts/bench.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "express": "5.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/express": "5.0.6",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "concurrently": "9.2.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}
