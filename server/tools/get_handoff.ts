@@ -68,14 +68,13 @@ export function getHandoff(ctx: ToolContext, raw: unknown): CallToolResult {
     // Never true while anything is unresolved.
     settled: unresolved.length === 0,
     unresolved,
-  };
-
-  GetHandoffOutput.parse(payload);
-  return ok({
-    ...payload,
     for: displayNameFor(toCaregiverId),
     asOf: ctx.asOf,
-  });
+  };
+
+  // Parse the payload that actually ships — see F33.
+  GetHandoffOutput.parse(payload);
+  return ok({ ...payload });
 }
 
 function nextOwner(nextAction: string, toCaregiverId: string): string {

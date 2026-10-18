@@ -97,17 +97,19 @@ export function requestRegimenChange(ctx: ToolContext, raw: unknown): CallToolRe
       // (3) PENDING — left for an authorised caregiver to pick up.
       pendingRequestId: requestId,
       eventId: refusalEvent?.eventId ?? requestId,
-    };
-
-    RequestRegimenChangeOutput.parse(payload);
-    // A refusal is a SUCCESS, not an error.
-    return ok({
-      ...payload,
       message:
         `${displayNameFor(ctx.identity.caregiverId)} cannot change the ${med.name.value} ` +
         `regimen. Only ${decision.refusal.whoCan} can. ` +
         `The request is now pending for them.`,
-    });
+    };
+
+    // Parse the payload that actually ships — see F33. This branch used to
+    // append `message` AFTER validating, so every refusal failed at the client
+    // with -32602 and the demo rendered a raw protocol error instead of a
+    // refusal. It is the one result this whole project exists to get right.
+    RequestRegimenChangeOutput.parse(payload);
+    // A refusal is a SUCCESS, not an error.
+    return ok({ ...payload });
   }
 
   const [appliedEvent] = ctx.store.append([
@@ -133,5 +135,9 @@ export function requestRegimenChange(ctx: ToolContext, raw: unknown): CallToolRe
     eventId: appliedEvent?.eventId ?? requestId,
   };
   RequestRegimenChangeOutput.parse(payload);
-  return ok(payload as unknown as Record<string, unknown>);
+  // Spread rather than cast. The cast here was hiding a real contract defect:
+  // `ok()` takes `Record<string, unknown>`, an interface has no index signature,
+  // and forcing it through with `as unknown as` meant nothing downstream could
+  // notice the response no longer matched its declared schema (F33).
+  return ok({ ...payload });
 }

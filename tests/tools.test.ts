@@ -127,6 +127,102 @@ describe('P3-7 · every tool satisfies the result contract', () => {
       expect(JSON.parse(textOf(result))).toEqual(payload);
     });
   });
+
+  // F33. Every handler used to build a NARROW payload, validate that, and then
+  // return a WIDER object via `ok({ ...payload, ...extras })`. The MCP client
+  // validates the whole response against `outputSchema`, which is strict
+  // (`additionalProperties: false`), so any undeclared field made the call fail
+  // with -32602 "Structured content does not match the tool's output schema".
+  //
+  // Four tools were affected. In the browser this meant the evidence drawer and
+  // the handover panel never rendered, and demo beat 2 — the refusal — showed a
+  // raw protocol error instead of a refusal. 205 tests and the protocol sweep
+  // all passed, because curl does not validate and nothing had called every
+  // tool through a real Client.
+  //
+  // This test is the one that should have existed. It calls every tool with
+  // valid arguments and lets the SDK Client enforce the declared contract.
+  it('every tool returns output that matches its own declared outputSchema', async () => {
+    await withServer(async (client) => {
+      // A real finding id, so explain_problem takes its success path.
+      const problems = await call(client, 'find_problems', { personId: PERSON_ID });
+      const findingId = (
+        problems.structuredContent as { findings: { findingId: string }[] }
+      ).findings[0]!.findingId;
+
+      const { tools } = await client.listTools();
+      const declared = new Map(
+        tools.map((t) => [
+          t.name,
+          {
+            properties: Object.keys(t.outputSchema?.properties ?? {}),
+            required: t.outputSchema?.required ?? [],
+            additionalProperties: t.outputSchema?.additionalProperties,
+          },
+        ]),
+      );
+
+      const calls: [string, Record<string, unknown>][] = [
+        ['get_current_regimen', { personId: PERSON_ID }],
+        ['find_problems', { personId: PERSON_ID }],
+        ['check_dose', { medicationId: 'med-ibuprofen', amountMg: 800 }],
+        ['record_dose', { medicationId: 'med-ibuprofen', amount: 800 }],
+        ['request_regimen_change', {
+          personId: PERSON_ID,
+          medicationId: 'med-acetaminophen',
+          reason: 'contract check',
+          newDose: 1000,
+        }],
+        ['explain_problem', { findingId }],
+        ['get_timeline', { personId: PERSON_ID, type: 'authority.*' }],
+        ['get_handoff', { personId: PERSON_ID, toCaregiverId: 'caregiver-priya' }],
+      ];
+
+      for (const [name, args] of calls) {
+        const result = await call(client, name, args);
+        const schema = declared.get(name)!;
+        const actual = Object.keys(result.structuredContent ?? {});
+
+        // The property check is the point. A real MCP client validates the whole
+        // response against this schema, and these schemas are strict, so an
+        // undeclared field is a hard -32602 at the client — not a warning.
+        const undeclared = actual.filter((k) => !schema.properties.includes(k));
+        expect(
+          undeclared,
+          `${name} returns undeclared field(s); a real client rejects the response. Add them to its output schema.`,
+        ).toEqual([]);
+
+        const absent = schema.required.filter((k) => !actual.includes(k));
+        expect(absent, `${name} omits required field(s)`).toEqual([]);
+      }
+    });
+  });
+
+  // The refusal branch returns `message`, which was the undeclared field that
+  // broke the demo's centrepiece. It needs a role without `full`, so it cannot
+  // ride on the loop above.
+  it('the REFUSAL branch of request_regimen_change also matches its outputSchema', async () => {
+    await withServer(async (client) => {
+      const result = await call(client, 'request_regimen_change', {
+        personId: PERSON_ID,
+        medicationId: 'med-acetaminophen',
+        reason: 'contract check',
+        newDose: 1000,
+      });
+      const payload = result.structuredContent as {
+        status: string;
+        message?: string;
+        pendingRequestId?: string;
+        refusal?: { whoCan: string };
+      };
+      // A refusal is a SUCCESSFUL result, never an error.
+      expect(result.isError).toBeFalsy();
+      expect(payload.status).toBe('refused');
+      expect(payload.refusal?.whoCan).toBeTruthy();
+      expect(payload.pendingRequestId).toBeTruthy();
+      expect(payload.message, 'the refusal must say who can act').toContain('cannot change');
+    });
+  });
 });
 
 describe('P3-3 · check_dose is a dry run that writes NOTHING', () => {

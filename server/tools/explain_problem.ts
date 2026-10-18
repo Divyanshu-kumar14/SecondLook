@@ -65,16 +65,17 @@ export function explainProblem(ctx: ToolContext, raw: unknown): CallToolResult {
     rules: finding.rules,
     derivation,
     events: events.map((e) => ({ eventId: e.eventId, ts: e.ts, source: e.source })),
-  };
-
-  ExplainProblemOutput.parse(payload);
-  return ok({
-    ...payload,
     what: finding.what,
     evidenceDetail: events,
     nextAction: finding.nextAction,
     acknowledged: finding.acknowledged,
-  });
+  };
+
+  // Parse what actually SHIPS. The handler used to validate a three-field
+  // payload and then return a wider object, so nothing on the server ever
+  // checked the response against the schema the client validates against (F33).
+  ExplainProblemOutput.parse(payload);
+  return ok({ ...payload });
 }
 
 function ruleExplanation(ruleId: string): string {

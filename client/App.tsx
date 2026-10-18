@@ -118,21 +118,30 @@ function Console() {
 
   const loadEvidence = useCallback(
     async (findings: Finding[]): Promise<Record<string, EvidenceItem[]>> => {
-      const results = await Promise.all(
-        findings.map(async (finding) => {
-          try {
-            const r = await call('explain_problem', { findingId: finding.findingId });
-            const detail = r.structured.evidenceDetail;
-            const items: EvidenceItem[] = Array.isArray(detail) ? [...(detail as EvidenceItem[])] : [];
-            return [finding.findingId, items] as const;
-          } catch {
-            const none: EvidenceItem[] = [];
-            return [finding.findingId, none] as const;
-          }
-        }),
-      );
+      // SEQUENTIAL, deliberately — do not "optimise" this into a Promise.all.
+      //
+      // The MCP SDK's StreamableHTTP client transport carries one SSE stream per
+      // session. Firing several POSTs at once on it aborts all but one: verified
+      // in the browser against the live server, where three concurrent
+      // `explain_problem` calls were ERR_ABORTED while the same three requests
+      // issued sequentially all returned 200 with full evidence. The server
+      // handles concurrency fine (curl, three at once, all 200) — the loss is
+      // entirely in the client transport, so serialising here is the fix.
+      //
+      // The cost is a few milliseconds: these calls are 0.1-1 ms server-side
+      // and the user is reading a spoken answer while they resolve.
       const merged: Record<string, EvidenceItem[]> = {};
-      for (const [id, items] of results) merged[id] = items;
+      for (const finding of findings) {
+        try {
+          const r = await call('explain_problem', { findingId: finding.findingId });
+          const detail = r.structured.evidenceDetail;
+          merged[finding.findingId] = Array.isArray(detail) ? [...(detail as EvidenceItem[])] : [];
+        } catch {
+          // Keep the key present with an empty list. The drawer distinguishes
+          // "loaded and empty" from "failed to load", so this is not silent.
+          merged[finding.findingId] = [];
+        }
+      }
       return merged;
     },
     [call],

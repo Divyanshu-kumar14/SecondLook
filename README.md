@@ -295,7 +295,7 @@ passed: 17   failed: 0
 ``` text
 $ npm run verify
   Test Files  13 passed (13)
-       Tests  205 passed (205)
+       Tests  207 passed (207)
 Lines        : 94.81% ( 311/328 )
 ```
 

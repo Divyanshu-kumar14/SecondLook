@@ -147,7 +147,9 @@ describe('P4-3 · phrasing layer', () => {
   });
 
   it('says an acknowledged finding is seen, not fixed', () => {
-    expect(speakFinding(finding({ acknowledged: true }))).toMatch(/Seen, not fixed/);
+    // Assert the SPACE too, not just the substring. Matching /Seen, not fixed/
+    // passed while the sentence read "...pharmacy.Seen, not fixed."
+    expect(speakFinding(finding({ acknowledged: true }))).toMatch(/\. Seen, not fixed\.$/);
     expect(speakFinding(finding({ acknowledged: false }))).not.toMatch(/Seen/);
   });
 

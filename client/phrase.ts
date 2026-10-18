@@ -72,9 +72,11 @@ export function speakFinding(finding: Finding): string {
   const med = medicationWord(finding.what);
   const ack = finding.acknowledged ? ' Seen, not fixed.' : '';
 
-  const sentence =
-    `${verb}. ${med} ${listWords(finding.rules)} — ${action}.` +
-    `${ack}`.trim();
+  // The leading space on `ack` is load-bearing. A `.trim()` used to sit on this
+  // concatenation and stripped it, producing "...with the pharmacy.Seen, not
+  // fixed." in the spoken answer — visible on screen and audible in the demo
+  // video. The existing test matched a bare substring and never noticed.
+  const sentence = `${verb}. ${med} ${listWords(finding.rules)} — ${action}.${ack}`;
 
   return capWords(sentence);
 }

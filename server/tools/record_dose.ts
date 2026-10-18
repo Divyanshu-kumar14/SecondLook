@@ -82,12 +82,11 @@ export function recordDose(ctx: ToolContext, raw: unknown): CallToolResult {
       source: event.source,
     },
     flags,
-  };
-
-  RecordDoseOutput.parse(payload);
-  return ok({
-    ...payload,
     recordedBy: `${displayNameFor(event.actorId)} (role ${event.actorRole})`,
     recordedAt: when(ts),
-  });
+  };
+
+  // Parse the payload that actually ships — see F33.
+  RecordDoseOutput.parse(payload);
+  return ok({ ...payload });
 }

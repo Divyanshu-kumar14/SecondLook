@@ -60,6 +60,9 @@ export const RecordDoseOutput = z.object({
   eventId: z.string(),
   provenance: ProvenanceSchema,
   flags: z.array(z.object({ ruleId: z.string(), findingId: z.string() })),
+  // Returned by the handler but previously undeclared — same -32602 defect.
+  recordedBy: z.string(),
+  recordedAt: z.string(),
 });
 export type RecordDoseIn = z.infer<typeof RecordDoseInput>;
 export type RecordDoseOut = z.infer<typeof RecordDoseOutput>;
@@ -82,6 +85,10 @@ export const RequestRegimenChangeOutput = z.object({
     .optional(),
   pendingRequestId: z.string().optional(),
   eventId: z.string(),
+  // Returned ONLY on the refusal branch, and previously undeclared. This is the
+  // demo's centrepiece: without it, every refusal threw at the client and the
+  // UI rendered the raw protocol error as its answer.
+  message: z.string().optional(),
 });
 export type RequestRegimenChangeIn = z.infer<typeof RequestRegimenChangeInput>;
 export type RequestRegimenChangeOut = z.infer<typeof RequestRegimenChangeOutput>;
@@ -141,6 +148,15 @@ export const ExplainProblemOutput = z.object({
   rules: z.array(z.string()),
   derivation: z.array(z.string()),
   events: z.array(z.object({ eventId: z.string(), ts: z.string(), source: z.string() })),
+  // The four below are returned by the handler but were missing here. A client
+  // validates the WHOLE response against `outputSchema`, and these schemas are
+  // strict (`additionalProperties: false`), so omitting them made every
+  // `explain_problem` call fail at the client with -32602. See F33/D27.
+  what: z.string(),
+  /** Full event objects, not just ids — this is what the drawer renders. */
+  evidenceDetail: z.array(z.unknown()),
+  nextAction: NextActionSchema,
+  acknowledged: z.boolean().optional(),
 });
 export type ExplainProblemIn = z.infer<typeof ExplainProblemInput>;
 export type ExplainProblemOut = z.infer<typeof ExplainProblemOutput>;
@@ -176,8 +192,14 @@ export const GetHandoffOutput = z.object({
       blocking: z.boolean(),
       whoMustResolve: z.string(),
       evidence: z.array(z.string()),
+      // Set only when the item is a finding someone has already seen. Being
+      // acknowledged does NOT remove it from the handover — see F33.
+      acknowledged: z.boolean().optional(),
     }),
   ),
+  // Returned by the handler but previously undeclared — same -32602 defect.
+  for: z.string(),
+  asOf: z.string(),
 });
 export type GetHandoffIn = z.infer<typeof GetHandoffInput>;
 export type GetHandoffOut = z.infer<typeof GetHandoffOutput>;
