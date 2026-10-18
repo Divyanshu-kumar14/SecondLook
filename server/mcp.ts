@@ -82,7 +82,7 @@ export class McpSessionManager {
       { name: 'second-look', version: '0.1.0' },
       { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
     );
-    // No tools are registered in Phase 0; Phase 3 supplies all eight.
+    // Phase 3 supplies all eight tools (P3-1..P3-8).
     this.#registerTools?.(mcp);
     return mcp;
   }
@@ -129,6 +129,8 @@ export class McpSessionManager {
           // DNS-rebinding defence — PRD §9.6 / plan P0-4 (task D5).
           enableDnsRebindingProtection: true,
           allowedHosts: allowedHostsFor(req),
+          // PRD §9.2 — application/json or text/event-stream.
+          enableJsonResponse: config.jsonResponse,
           allowedOrigins: originsForPort(req.socket.localPort ?? config.port),
         });
 
