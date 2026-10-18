@@ -8,7 +8,7 @@
  * Performance: a single pass with Map lookups (no array scans). Budget is a
  * cold fold over ~300 events in under 25 ms; `tests/fold.test.ts` asserts it.
  */
-import type { CareEvent, Source } from './schemas/events.js';
+import type { CareEvent, Role, Source } from './schemas/events.js';
 // Only the types still referenced by name. The per-case payloads do NOT need
 // casting — `CareEvent` is an intersection of a discriminated union with the
 // envelope, so narrowing on `event.type` already types `event.payload`.
@@ -26,6 +26,8 @@ import type {
 export interface Provenance {
   eventId: string;
   actorId: string;
+  /** Resolved server-side at write time (PRD §5.4). R6 reads this. */
+  actorRole: Role;
   ts: string;
   source: Source;
 }
@@ -37,7 +39,13 @@ export interface Sourced<T> {
 }
 
 function prov(event: CareEvent): Provenance {
-  return { eventId: event.eventId, actorId: event.actorId, ts: event.ts, source: event.source };
+  return {
+    eventId: event.eventId,
+    actorId: event.actorId,
+    actorRole: event.actorRole,
+    ts: event.ts,
+    source: event.source,
+  };
 }
 
 function sourced<T>(event: CareEvent, value: T): Sourced<T> {
@@ -85,6 +93,11 @@ export interface DoseRecord {
   provenance: Provenance;
 }
 
+export type EventRef = { eventId: string; ts: string; source: Source };
+
+/** Change requests / refusals / applied changes keep their event identity. */
+export type WithEventRef<T> = T & EventRef;
+
 export interface CareState {
   person?: Sourced<PersonRegistered>;
   caregivers: Map<string, CaregiverState>;
@@ -92,12 +105,12 @@ export interface CareState {
   planConstraints: Sourced<PlanConstraintSet>;
   dispensations: Dispensation[];
   doses: DoseRecord[];
-  missedDoses: DoseMissed[];
-  observations: ObservationRecorded[];
-  documents: DocumentAttached[];
-  changeRequests: Map<string, AuthorityChangeRequested>;
-  refusals: Map<string, AuthorityChangeRefused>;
-  appliedChanges: Map<string, AuthorityChangeApplied>;
+  missedDoses: Array<DoseMissed & EventRef>;
+  observations: Array<ObservationRecorded & EventRef>;
+  documents: Array<DocumentAttached & EventRef>;
+  changeRequests: Map<string, WithEventRef<AuthorityChangeRequested>>;
+  refusals: Map<string, WithEventRef<AuthorityChangeRefused>>;
+  appliedChanges: Map<string, WithEventRef<AuthorityChangeApplied>>;
   acknowledgedProblems: Set<string>;
   /** Index of last event folded, used for cache invalidation. */
   foldedThrough: number;
@@ -233,35 +246,66 @@ export function fold(events: readonly CareEvent[]): CareState {
       }
 
       case 'dose.missed': {
-        state.missedDoses.push(event.payload);
+        state.missedDoses.push({
+          ...event.payload,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
         break;
       }
 
       case 'observation.recorded': {
-        state.observations.push(event.payload);
+        state.observations.push({
+          ...event.payload,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
         break;
       }
 
       case 'authority.change_requested': {
         const p = event.payload;
-        state.changeRequests.set(p.requestId, p);
+        // Event id + ts + source are retained so R5 can cite real evidence.
+        state.changeRequests.set(p.requestId, {
+          ...p,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
         break;
       }
 
       case 'authority.change_refused': {
         const p = event.payload;
-        state.refusals.set(p.requestId, p);
+        state.refusals.set(p.requestId, {
+          ...p,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
         break;
       }
 
       case 'authority.change_applied': {
         const p = event.payload;
-        state.appliedChanges.set(p.requestId, p);
+        state.appliedChanges.set(p.requestId, {
+          ...p,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
         break;
       }
 
       case 'document.attached': {
-        state.documents.push(event.payload);
+        state.documents.push({
+          ...event.payload,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
         break;
       }
 

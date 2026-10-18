@@ -339,9 +339,12 @@ describe('P1-4 · the event types the §7 fixture does not produce', () => {
         ts: '2026-10-17T09:00:00.000Z',
       },
     ]);
-    expect(fold(events).missedDoses).toEqual([
+    expect(fold(events).missedDoses).toMatchObject([
       { personId: 'p1', medicationId: 'm1', scheduledAt: '2026-10-17T08:00:00.000Z' },
     ]);
+    // The event identity is retained so a rule can cite it as evidence.
+    expect(fold(events).missedDoses[0]!.eventId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(fold(events).missedDoses[0]!.source).toBe('caregiver');
   });
 });
 
