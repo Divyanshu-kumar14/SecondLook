@@ -147,3 +147,79 @@ emitted schema contains no `$ref`/`$defs` (regression guard for **D2**).
 **What we changed.** Self-excluding pattern: `pkill -f "node .*index[.]js"`.
 **Cost.** 2 min.
 **Would we do it differently.** Yes — bracket one character of any `pkill -f` pattern.
+
+---
+
+## Phase 1 — Event log, fold & authority (Sun 18 Oct 2026)
+
+### F12 · Coverage gate failed at 81 % on the first run · P1-4/P1-7 · RESOLVED
+**What happened.** `npm test -- --coverage` failed: `Coverage for lines (81.04%) does not
+meet global threshold (90%)`. `fold.ts` sat at 66.66 %.
+**Why it happened.** The §7 fixture only produces 12 of the 17 event types. `caregiver.left`,
+`caregiver.authority_changed`, `med.changed` and `dose.missed` had no coverage at all, and
+none of the defensive "unknown id" branches were exercised.
+**How we found it.** The coverage gate — which is exactly why plan D10 scoped `include` to
+four paths instead of leaving it global, where it would have been ignored.
+**What we changed.** Added 7 tests covering the four missing event types, `med.changed`
+with and without `maxDailyMg`, and the defensive branches for unknown caregiver and unknown
+medication. Coverage went 81.04 % → **92.15 %**.
+**Cost.** 20 min.
+**Would we do it differently.** No. A gate that is never red is a gate that means nothing.
+
+### F13 · The coverage text reporter omits a 100 % file · tooling · NOTED
+**What happened.** `server/authority.ts` never appeared in the coverage table, which reads
+like the security-critical file is not being measured.
+**Why it happened.** The v8 text reporter's table listed only `fold.ts` and `log.ts`.
+**How we found it.** Reading `coverage/coverage-summary.json` instead of trusting the table.
+**What we changed.** Nothing in code. **Verified `authority.ts` is at 100 % lines**, so
+DoD §1.5 is genuinely met. Per-file checks are now read from the JSON summary.
+**Cost.** 3 min.
+**Would we do it differently.** Yes — confirm any coverage claim from the JSON summary,
+never from a rendered table that may be truncated.
+
+### F14 · 17 unnecessary type casts in `fold.ts` · P1-4 · RESOLVED
+**What happened.** ESLint flagged 17 × `no-unnecessary-type-assertion` on
+`event.payload as SomeType`.
+**Why it happened.** I assumed the payloads were not discriminated-union members. They are:
+`CareEvent` is an intersection of a discriminated union with the envelope, so narrowing on
+`event.type` already types `event.payload`.
+**How we found it.** `npm run lint`.
+**What we changed.** Removed all 17 casts and the 8 now-unused type imports. Better code
+than before — the compiler was already proving the narrowing.
+**Cost.** 10 min.
+**Would we do it differently.** Yes — try the narrowing before reaching for `as`.
+
+### F15 · The fixture could not name the findings it acknowledges · P1-9 · RESOLVED
+**What happened.** `problem.acknowledged` must carry a `findingId`, but that id hashes an
+*anchor event id* — and anchor event ids do not exist until the earlier events are already
+in the chain. A single flat fixture array is circular.
+**Why it happened.** Not a defect: D3 makes `findingId` depend on real event ids precisely
+so it stays stable as evidence grows.
+**How we found it.** Designing the §7 scenario against the D3 formula.
+**What we changed.** The seed runs in **two passes** — append the scenario, read back the
+real refusal and first-acetaminophen-dose event ids, then append acknowledgements naming
+those. The seed aborts loudly if either anchor is missing.
+**Cost.** 15 min.
+**Would we do it differently.** No. This proves D3 works against real data, not a mock.
+
+### F16 · Test harness misread a working tamper check · P1-3 · NOTED
+**What happened.** The harness printed "FAIL — tamper went undetected" immediately after
+`verify-log` had correctly reported `TAMPERED — chain breaks at event 14`.
+**Why it happened.** I read `${PIPESTATUS[0]}` after the pipeline had been clobbered by an
+intervening command, so the captured code was empty rather than `1`.
+**How we found it.** The tool's own output said TAMPERED; only my harness disagreed.
+**What we changed.** Re-ran all three exit codes without a pipeline: clean → 0,
+tampered → 1, empty → 2. DoD #5 is met.
+**Cost.** 3 min.
+**Would we do it differently.** Yes — capture `PIPESTATUS` immediately, or avoid the pipe.
+
+### F17 · Seed and server boot could have drifted apart · P1-9/D4 · RESOLVED
+**What happened.** `scripts/seed.ts` and the server boot path both need to produce the §7
+log. Two implementations would be free to diverge, and the second judge run would silently
+differ from the first.
+**Why it happened.** The plan requires both `npm run seed` and boot-time re-seeding.
+**How we found it.** Anticipated while writing the boot path, not after a bug.
+**What we changed.** Extracted `seedDemoLog()` into `fixtures/seed.ts`; the script and
+`server/index.ts` both call it. One source of truth, verified by identical sha256.
+**Cost.** 10 min.
+**Would we do it differently.** No.

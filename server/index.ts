@@ -5,8 +5,18 @@
 import { existsSync } from 'node:fs';
 import { createApp } from './app.js';
 import { config } from './config.js';
+import { seedDemoLog } from '../fixtures/seed.js';
 
 const { app, sessions, clientDir } = createApp();
+
+// Plan D4: in `demo` mode every boot truncates and re-seeds a byte-identical
+// log, so the second judge run and the second recording see exactly what the
+// first one did. `persist` mode is used by tests and leaves the log alone.
+let logSummary = 'persisted (not re-seeded)';
+if (config.logMode === 'demo') {
+  const seeded = seedDemoLog(config.logFile);
+  logSummary = `seeded ${seeded.count} events, sha256 ${seeded.sha256.slice(0, 16)}…`;
+}
 
 if (!existsSync(clientDir)) {
   console.error(
@@ -19,7 +29,7 @@ const server = app.listen(config.port, config.host, () => {
   console.log(`[second-look] listening on http://${config.host}:${config.port}`);
   console.log(`[second-look]   MCP endpoint : POST|GET|DELETE http://${config.host}:${config.port}/mcp`);
   console.log(`[second-look]   client       : http://${config.host}:${config.port}/`);
-  console.log(`[second-look]   log mode     : ${config.logMode} -> ${config.logFile}`);
+  console.log(`[second-look]   log mode     : ${config.logMode} — ${logSummary}`);
   console.log(`[second-look]   origins      : ${config.allowedOrigins.join(', ')}`);
 });
 

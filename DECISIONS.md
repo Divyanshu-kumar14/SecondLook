@@ -121,3 +121,46 @@ native module is present (`better-sqlite3`, `bcrypt`, `sharp`, `canvas` all abse
 
 *If a judge reads the exit criterion literally, the mitigation is pinning Vite 7 (Rollup).*
 Cost: rebuild risk on a deadline. Not taken.
+
+---
+
+## D15 — `fold()` carries no per-case type assertions *(new, Phase 1)*
+**Status: RESOLVED**
+
+`CareEvent` is `EventBodySchema.and(envelopeSchema)` — an intersection of a **discriminated
+union** with the event envelope. Narrowing on `event.type` therefore already types
+`event.payload` correctly, so all 17 `event.payload as SomeType` casts were dead weight that
+ESLint rightly rejected.
+
+**Decision.** No casts. The `switch` in `server/fold.ts` narrows on `type`, and the `default`
+branch is an exhaustiveness guard that breaks the build if an 18th event type is added,
+rather than silently dropping data at runtime.
+
+## D16 — Seed runs in two passes so acknowledgements name real findings *(new, Phase 1)*
+**Status: RESOLVED**
+
+D3 makes `findingId` a hash of `(medicationId, ruleIds, anchorEventId)`. A
+`problem.acknowledged` event must therefore name an anchor event id — which does not exist
+until the earlier events are in the chain. A single flat fixture array is circular.
+
+**Decision.** `seedDemoLog()` appends the scenario first, reads the *real* event ids back out
+of the log, then appends the acknowledgements. If either anchor is missing it throws rather
+than writing a dangling acknowledgement.
+
+**Why this matters.** D3 is therefore exercised against real chained data on every single
+seed, not just in a unit test with mock ids. `findingIdFor()` lives in `server/finding-id.ts`
+and Phase 2's grouping MUST import it rather than reimplementing the formula.
+
+## D17 — Coverage gate scoped, and read from the JSON summary *(new, Phase 1)*
+**Status: RESOLVED**
+
+Plan D10 scopes coverage to `server/rules/**`, `server/fold.ts`, `server/authority.ts`,
+`server/log.ts`. That scoping held up: the first Phase 1 coverage run **failed at 81.04 %**,
+which is the gate doing its job rather than being quietly ignored.
+
+**Decision.** Keep the scope. Read per-file numbers from `coverage/coverage-summary.json`, not
+from the v8 text table — the table omitted `authority.ts` entirely because it was at 100 %,
+which at a glance is indistinguishable from "not measured".
+
+Current: `authority.ts` **100 %**, `fold.ts` 90.27 %, `log.ts` 92.85 %, total **92.15 %**,
+gate exits 0.
