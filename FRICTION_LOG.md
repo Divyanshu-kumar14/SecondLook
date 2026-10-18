@@ -223,3 +223,83 @@ differ from the first.
 `server/index.ts` both call it. One source of truth, verified by identical sha256.
 **Cost.** 10 min.
 **Would we do it differently.** No.
+---
+
+## Phase 2 — Rules engine (Sun 18 Oct 2026)
+
+### F18 · `fold()` was discarding exactly what R5 and R6 need · P2-6/P2-7 · RESOLVED
+**What happened.** Before writing R5 I checked what `fold()` retained. It stored the
+`authority.change_refused` and `dose.recorded` **payloads only** — no `eventId`. R5 must cite
+the refusal as evidence, and R6 must read the role recorded on the event. Neither was available.
+**Why it happened.** Phase 1 folded for provenance *display*; Phase 2 folds for *evidence*. The
+first design had no `actorRole` on `Provenance` at all.
+**How we found it.** Reading `fold.ts` against the rule contracts before writing the rules.
+**What we changed.** Added `actorRole` to `Provenance`, and retained `{eventId, ts, source}`
+alongside every refusal, change request, applied change, observation, document and missed dose.
+**Cost.** 15 min.
+**Would we do it differently.** No. Designing the consumer before the data shape is the whole
+point — this was caught by reading, not by a bug.
+
+### F19 · The fixture's hard-coded acknowledgement could never match · P2-9 · RESOLVED
+**What happened.** PRD §6.5 groups hits **per medication**, so R1 and R2 on acetaminophen collapse
+into ONE finding with `rules: ['R1','R2']`. But the Phase 1 fixture acknowledged
+`findingIdFor('med-acetaminophen', ['R1'], …)` — a finding that the engine can never emit. The
+acknowledgement would have been silently dead forever.
+**Why it happened.** The fixture was written before grouping existed, and the two documents
+disagreed about what a finding *is*.
+**How we found it.** Running the engine against the seeded log: the R1 finding came back
+`ack=false` despite an acknowledgement existing for it.
+**What we changed.** The fixture now declares *which rule* was acknowledged and *when*;
+`seedDemoLog` runs the real engine to resolve the actual `findingId`, and throws if no finding
+contains that rule. An acknowledgement can no longer dangle.
+**Cost.** 25 min.
+**Would we do it differently.** No. This is the second time a cross-phase assumption has been
+wrong; both times a test caught it rather than a demo.
+
+### F20 · The permutation test found real non-determinism · P2-8 · RESOLVED
+**What happened.** Rotating the rule-hit input produced a **different** findings array. The
+`findingId`s and the ranking were stable, but the `evidence` arrays came out in a different
+order.
+**Why it happened.** `unionEvidence()` accumulated evidence in first-seen order, so its output
+depended on the order hits happened to arrive in.
+**How we found it.** The rotation test, which is the only reason it exists. A "3 runs are
+identical" check would NOT have caught this — it re-ran the same path every time.
+**What we changed.** The union is now sorted, which is a total order and therefore deterministic.
+**Cost.** 10 min.
+**Would we do it differently.** No. Determinism needed testing against *permutation*, not just
+repetition. Repetition proves stability; permutation proves order-independence.
+
+### F21 · Four "after asOf" tests were testing the wrong thing · P2-2..P2-7 · RESOLVED
+**What happened.** Four tests asserting a rule ignores events after `asOf` failed. My fixtures put
+the "future" event on Day 6 while `asOf` was Day 7 18:00 — so the event was *inside* the window.
+**Why it happened.** I set the boundary events relative to the medication's timeline rather than
+to the injected clock.
+**How we found it.** Four failures at once, which made the shared cause obvious.
+**What we changed.** Moved all four past the boundary (Day 7, after 18:00). The point of `asOf`
+is that it is injected, so boundary tests must be stated relative to it.
+**Cost.** 8 min.
+**Would we do it differently.** Yes — write boundary fixtures from `asOf` backwards, not forwards
+from Day 0.
+
+### F22 · Two R1 tests encoded wrong arithmetic · P2-2 · RESOLVED
+**What happened.** (a) A test asserted a 5 h gap does NOT fire against a 6 h interval with 30 min
+tolerance — but 5 h is inside 5 h 30 min, so it fires. (b) The `maxDailyMg` escalation test put
+its doses on Days 1–2 while `asOf` was Day 7, so they sat outside the rolling 24 h window and the
+cap was never breached.
+**Why it happened.** I reasoned about the interval without doing the subtraction, and about the
+rolling window without checking where it opens.
+**How we found it.** Both tests failed against the real engine rather than my mental model.
+**Cost.** 8 min.
+**Would we do it differently.** Yes — compute the boundary once and write it into the test name.
+
+### F23 · Grouping anchors on the earliest evidence, which is not the obvious one · P2-8 · NOTED
+**What happened.** The ibuprofen finding `[R3, R4, R6]` anchors on the **plan constraint** event
+(Day 1, 08:10), not the discontinue (Day 3) that the rules narrative leads with.
+**Why it happened.** D3 anchors on the earliest triggering event across the WHOLE group, and R4's
+administered mode traces back to the moment the bar was set.
+**How we found it.** A test asserting the wrong anchor failed and pointed at the real one.
+**What we changed.** Kept the engine's behaviour — it is correct — and made the test assert the
+reasoning as well as the value, so it cannot later pass for the wrong reason.
+**Cost.** 5 min.
+**Would we do it differently.** No, but it is worth a line in the README: the oldest evidence
+wins, and that is a feature, not a bug.

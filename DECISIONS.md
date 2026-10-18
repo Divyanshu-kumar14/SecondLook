@@ -164,3 +164,43 @@ which at a glance is indistinguishable from "not measured".
 
 Current: `authority.ts` **100 %**, `fold.ts` 90.27 %, `log.ts` 92.85 %, total **92.15 %**,
 gate exits 0.
+---
+
+## D18 — Evidence unions are sorted, not first-seen *(new, Phase 2)*
+**Status: RESOLVED**
+
+`groupHits` unions every hit's evidence. Accumulating in first-seen order made the output depend
+on the order hits arrived in — rotating the input produced a different `evidence` array even
+though ids and ranking were stable.
+
+**Decision.** Sort the union. Lexicographic order is arbitrary but total. Chronological ordering
+belongs in `explain_problem` (Phase 3), where evidence ids resolve back to whole events.
+
+**Why this matters beyond tidiness.** PRD §6.5 requires fully deterministic output. A "three runs
+identical" test does not catch order-dependence; only the permutation test does. Both now exist.
+
+## D19 — Acknowledgements resolve through the engine, not hard-coded ids *(new, Phase 2)*
+**Status: RESOLVED**
+
+PRD §6.5 groups hits per medication, so R1 and R2 on acetaminophen are ONE finding with
+`rules: ['R1','R2']`. The Phase 1 fixture acknowledged `findingIdFor(…, ['R1'], …)` — a finding the
+engine can never emit. The acknowledgement was dead on arrival.
+
+**Decision.** The fixture declares *which rule* was acknowledged and *when*. `seedDemoLog()` runs
+the real engine to resolve the actual `findingId`, and throws if no finding contains that rule.
+
+**Consequence for Phase 3.** Any hard-coded `findingId` anywhere in the codebase is suspect. If
+`find_problems` needs a demo finding, resolve it from `findProblems()`, never type it.
+
+## D20 — A finding anchors on its oldest evidence, not its loudest *(new, Phase 2)*
+**Status: RESOLVED**
+
+The ibuprofen finding `[R3, R4, R6]` anchors on the `plan.constraint_set` event (Day 1 08:10),
+not the `med.discontinued` event (Day 3) that the narrative leads with.
+
+**Decision.** Keep it. D3 says the anchor is the earliest triggering event across the group, and
+R4's administered mode genuinely traces back to the moment the bar was set. Anchoring on the
+discontinue would make the id change if the plan constraint were ever re-asserted later.
+
+**Note for the README.** "The oldest evidence wins" is a feature: it is why an acknowledged
+finding cannot be renamed by new evidence.
