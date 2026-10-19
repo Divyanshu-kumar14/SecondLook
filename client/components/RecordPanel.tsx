@@ -20,6 +20,30 @@ const TABS: { id: RecordView; label: string }[] = [
   { id: 'handover', label: 'Handover' },
 ];
 
+/**
+ * Placeholder blocks in the shape of the content that is loading. They reserve
+ * the final layout so the panel does not jump when data arrives (no layout
+ * shift), and keep `aria-busy` meaningful for screen readers announcing the
+ * region. animate-pulse is already collapsed to 0.01ms by styles.css under
+ * prefers-reduced-motion, so nothing new to gate here. Blocks are aria-hidden:
+ * the visible row count is noise, not content — the sr-only line carries the
+ * words.
+ */
+function Skeleton({ className }: { className: string }) {
+  return <div aria-hidden className={`animate-pulse rounded-ctl bg-paper-sunk ${className}`} />;
+}
+
+/** One audit row ≈ three stacked lines. */
+function SkeletonList({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="grid gap-2">
+      {Array.from({ length: rows }, (_, i) => (
+        <Skeleton key={i} className={`h-12 border border-rule ${i % 2 ? 'w-[94%]' : 'w-[97%]'}`} />
+      ))}
+    </div>
+  );
+}
+
 interface AuditEvent {
   eventId: string;
   ts: string;
@@ -141,7 +165,15 @@ function AuditLog({ call }: { call: (n: string, a: Record<string, unknown>) => P
   }, [call]);
 
   if (error) return <p className="text-sm text-critical">Could not load the audit log: {error}</p>;
-  if (!events) return <p className="text-sm text-ink-faint">Loading the audit log…</p>;
+  if (!events)
+    // aria-busy on the region while it fills; the skeleton mirrors the row
+    // shape so nothing jumps when the real list lands (no CLS).
+    return (
+      <div aria-busy="true">
+        <p className="sr-only">Loading the audit log…</p>
+        <SkeletonList />
+      </div>
+    );
   if (events.length === 0) {
     return <p className="text-sm text-ink-faint">No changes to a regimen have been requested.</p>;
   }
@@ -193,7 +225,20 @@ function HandoverPanel({ call }: { call: (n: string, a: Record<string, unknown>)
   }, [call]);
 
   if (error) return <p className="text-sm text-critical">Could not build the handover: {error}</p>;
-  if (!data) return <p className="text-sm text-ink-faint">Building the handover…</p>;
+  if (!data)
+    // Same contract as the audit tab: shape-reserving skeleton + aria-busy.
+    return (
+      <div aria-busy="true">
+        <p className="sr-only">Building the handover…</p>
+        <div className="grid gap-4">
+          <Skeleton className="h-16 border border-critical/30" />
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-[92%]" />
+          <Skeleton className="h-10 w-[96%]" />
+        </div>
+      </div>
+    );
 
   return (
     <div className="grid gap-4">

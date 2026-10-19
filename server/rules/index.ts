@@ -46,3 +46,6 @@ export function analyze(events: readonly CareEvent[], asOf: string): Finding[] {
 
 export * from './types.js';
 export * from './group.js';
+/** The shared dose index used by R1/R3/R4. Exported for tests and the bench. */
+export { doseIndexFor } from './dose-index.js';
+export type { DoseIndex, DoseWithMs } from './dose-index.js';

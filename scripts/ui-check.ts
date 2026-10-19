@@ -211,6 +211,10 @@ async function run(): Promise<void> {
         !/Loading the|Building the|Could not (load|build)/i.test(text),
       );
       if (tab === 'Handover') ok('handover lists unresolved items', /Still unresolved/i.test(text));
+      // The skeleton placeholders must clear once data lands; an aria-busy
+      // region that never goes quiet is a stuck loading state.
+      const busyLeft = await page.locator(`role=tabpanel >> [aria-busy="true"]`).count();
+      ok(`"${tab}" tab is no longer busy`, busyLeft === 0, `${busyLeft} busy region(s)`);
       await page.screenshot({ path: `${SHOTS}/0${tab === 'Audit log' ? 5 : 6}-${tab.toLowerCase().replace(' ', '-')}.png` });
     }
 
@@ -248,6 +252,58 @@ async function run(): Promise<void> {
       ok(`no horizontal overflow at ${viewport.width}px`, overflow <= 1, `${overflow}px`);
       await page.screenshot({ path: `${SHOTS}/0${name === 'tablet' ? 8 : 7}-${name}.png` });
     }
+
+    // ── Contrast: measured here, not claimed in DESIGN.md ──────────────────
+    // WCAG 2.1 relative-luminance ratio against the theme's own variables.
+    // 4.5:1 is the AA floor for normal text; every pair below renders at
+    // small sizes somewhere in the UI.
+    // The body is passed serialized, not as a closure: tsx's transform injects
+    // a __name helper into local arrow functions that does not exist in the
+    // page, breaking evaluate(). Plain JS in, numbers out. Ratios are measured
+    // in BOTH color schemes: the dark palette is a separate token set and a
+    // light-only pass would say nothing about it. Note the corrected parse —
+    // slice offsets against m[0] WITH the '#', after the first version sliced
+    // the capture group and reported impossible ratios that caught itself.
+    const contrastBody = `(() => {
+      const css = getComputedStyle(document.documentElement);
+      const parse = (n) => {
+        const m = css.getPropertyValue(n).trim().match(/#([0-9a-f]{6})/i);
+        if (!m) return [0, 0, 0];
+        const h = m[0];
+        return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      };
+      const lum = ([r, g, b]) => {
+        const f = (c) => {
+          const s = c / 255;
+          return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const ratio = (fg, bg) => {
+        const l1 = lum(parse(fg));
+        const l2 = lum(parse(bg));
+        const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+        return (hi + 0.05) / (lo + 0.05);
+      };
+      return {
+        'ink on card': ratio('--color-ink', '--color-card'),
+        'ink-soft on card': ratio('--color-ink-soft', '--color-card'),
+        'ink-faint on paper': ratio('--color-ink-faint', '--color-paper'),
+        'paper on ink (button)': ratio('--color-paper', '--color-ink'),
+      };
+    })()`;
+    const light: Record<string, number> = await page.evaluate(contrastBody);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    const dark: Record<string, number> = await page.evaluate(contrastBody);
+    await page.emulateMedia({ colorScheme: null });
+    const pairs: Record<string, number> = { ...light };
+    for (const [k, v] of Object.entries(dark)) pairs[`${k} (dark)`] = v;
+    const fails = Object.entries(pairs).filter(([, v]) => v < 4.5);
+    ok(
+      'contrast pairs meet WCAG AA',
+      fails.length === 0,
+      Object.entries(pairs).map(([k, v]) => `${k} ${v.toFixed(2)}:1`).join(', '),
+    );
   } finally {
     // Resource cleanup must happen on the failure path too — a leaked browser
     // here would leave a process holding the port for the next run.

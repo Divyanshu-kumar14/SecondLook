@@ -98,7 +98,7 @@ was a bug, not a gap.
 
 **Nobody had seen this render.** Every automated gate passed — typecheck, lint, 205 tests,
 coverage, build — and no human had looked at the rebuilt interface. *Closed in Phase 5:* a live
-browser check now drives the demo spine end to end (`npm run verify-ui`, 20/20), and screenshots
+browser check now drives the demo spine end to end (`npm run verify-ui`, 23/23), and screenshots
 have been reviewed. That pass is what surfaced F33, which had been broken since Phase 3.
 
 **Responsive was unverified below desktop.** *Closed in Phase 5:* the check now asserts zero

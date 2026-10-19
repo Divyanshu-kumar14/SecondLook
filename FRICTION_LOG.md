@@ -480,3 +480,10 @@ The `.trim()` was there to tidy the empty case, where it was a no-op, and it als
 **What we changed.** The COPY is removed and the comment replaced with the actual mechanism and the evidence for it. Also switched `CMD ["npm", "start"]` to `CMD ["node", "dist/node/server/index.js"]`, since npm as PID 1 does not forward SIGTERM — `docker stop` would have waited out the timeout and SIGKILLed, losing an unflushed log.
 **Cost.** 30 min to find; the error had already reached a commit message and the Dockerfile comment.
 **Would we do it differently.** Would have run the instructions instead of reasoning about them. A specific claim in a comment needs the same evidence as a specific claim in the README — and we hold the README to that standard and not the Dockerfile.
+
+### F37 · The contrast claim was asserted, never computed — and one pair failed · P4/P5 · RESOLVED
+**What happened.** The muted text token (`#7d7768` on warm paper) measured **4.06:1** against the WCAG AA floor of 4.5:1 for normal-size text, light theme; ~40 render sites across the app. Dark theme passed at 5.67:1.
+**How we found it.** A new permanent harness check computing relative-luminance ratios from the theme's own variables, in both color schemes. Its first run reported impossible numbers (3.46:1 for near-black on near-white) — which exposed a parse bug in the checker itself, not only a defect in the UI. Both facts were then confirmed by hand before any token was touched.
+**What we changed.** Light `ink-faint` darkened one step to `#6f6a5c` (4.92:1 measured); dark untouched. DESIGN.md synced. All eight pairs now live in the harness as a regression guard.
+**Cost.** ~30 min, mostly the measurement.
+**Would we do it differently.** "Looks fine on a good screen" is not an accessibility test — the number comes first, judgment second. And a checker that can lie must fail loudly on impossible values, because impossible numbers are information: they are how a broken meter announces itself.

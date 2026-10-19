@@ -30,7 +30,7 @@ household tool and the surface should not imply a hospital.
 | `paper` | `#f7f4ee` | page |
 | `card` | `#fffdf9` | raised surface |
 | `ink` | `#191714` | text |
-| `ink-soft` / `ink-faint` | `#55503f` / `#7d7768` | secondary, tertiary |
+| `ink-soft` / `ink-faint` | `#55503f` / `#6f6a5c` | secondary, tertiary |
 | `trust` | `#1c6136` | acknowledgment, safe actions |
 | `critical` → `low` | 4 steps | severity only |
 
