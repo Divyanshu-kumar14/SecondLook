@@ -84,7 +84,7 @@ async function session(token?: string): Promise<ClientSession> {
   };
 }
 
-describe('P4-1 · the client connects over real HTTP and lists all eight tools', () => {
+describe('P4-1 · the client connects over real HTTP and lists all nine tools', () => {
   it('completes a handshake and lists the tools', async () => {
     const s = await session();
     try {

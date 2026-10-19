@@ -3,7 +3,8 @@
  *
  * Fires when an `authority.change_refused` exists whose requester role was
  * below `full`. Severity high. ONE HIT PER REQUEST, not per attempt, so
- * retrying a refusal does not inflate the finding count.
+ * retrying a refusal does not inflate the finding count. A request that was
+ * later approved or declined stops firing — it has been settled.
  */
 import type { CareState } from '../fold.js';
 import { displayNameFor } from '../identity.js';
@@ -18,6 +19,16 @@ export function r5UnauthorizedPlanChange(state: CareState, asOf: string): RuleHi
   for (const refusal of state.refusals.values()) {
     if (Date.parse(refusal.ts) > asOfMs) continue;
     if (refusal.requesterRole === 'full') continue;
+
+    // A request that was later approved or declined is settled: the question
+    // this rule asks — "who can say yes?" — has been answered. The refusal
+    // itself stays in the audit log; only the open item closes.
+    if (
+      state.appliedChanges.has(refusal.requestId) ||
+      state.declinedChanges.has(refusal.requestId)
+    ) {
+      continue;
+    }
 
     const med = state.medications.get(refusal.medicationId);
     const medName = med?.name.value ?? refusal.medicationId;

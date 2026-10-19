@@ -13,7 +13,12 @@
  */
 import type { Role } from './schemas/events.js';
 
-export const PERMISSIONS = ['read_record', 'record_dose', 'request_plan_change'] as const;
+export const PERMISSIONS = [
+  'read_record',
+  'record_dose',
+  'request_plan_change',
+  'resolve_plan_change',
+] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 /**
@@ -21,10 +26,17 @@ export type Permission = (typeof PERMISSIONS)[number];
  *
  * `read_record` and `record_dose` are granted to EVERY role, including `none`:
  * a guest may read the record, and a real dose must always be recordable. The
- * matrix therefore differs on exactly one axis — who may change a regimen.
+ * matrix therefore differs on exactly one axis — who may change a plan
+ * (`request_plan_change`) and who may settle the resulting request
+ * (`resolve_plan_change`). Both belong to `full` alone.
  */
 const MATRIX: Readonly<Record<Role, ReadonlySet<Permission>>> = Object.freeze({
-  full: new Set<Permission>(['read_record', 'record_dose', 'request_plan_change']),
+  full: new Set<Permission>([
+    'read_record',
+    'record_dose',
+    'request_plan_change',
+    'resolve_plan_change',
+  ]),
   record: new Set<Permission>(['read_record', 'record_dose']),
   none: new Set<Permission>(['read_record', 'record_dose']),
 });
@@ -56,6 +68,9 @@ const ROLE_LABEL: Readonly<Record<Role, string>> = Object.freeze({
   none: 'unauthorised caregiver (role none)',
 });
 
+/** Human phrase for "who can say yes" — shared by refusals and pending lists. */
+export const WHO_MAY_CHANGE = ROLES_THAT_MAY_CHANGE.map((r) => ROLE_LABEL[r]).join(' or ');
+
 /**
  * Decide whether `role` may perform `permission`.
  *
@@ -73,14 +88,14 @@ export function decide(
     allowed: false,
     refusal: {
       code: 'UNAUTHORIZED_PLAN_CHANGE',
-      whoCan: ROLES_THAT_MAY_CHANGE.map((r) => ROLE_LABEL[r]).join(' or '),
+      whoCan: WHO_MAY_CHANGE,
       sinceWhen,
     },
   };
 }
 
 /**
- * Convenience for the one refusing tool. A refusal here is a SUCCESSFUL
+ * Convenience for the refusing authority tools. A refusal here is a SUCCESSFUL
  * outcome the caller renders — never an exception.
  */
 export function decidePlanChange(

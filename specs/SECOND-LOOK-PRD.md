@@ -414,3 +414,16 @@ Never cut: `check_dose` or `find_problems`, refusal + audit, identity, README ve
 | Shared-list / per-person dose-log / missed-dose-alert features in consumer apps | verified (vendor-authored) | mwm.ai Uncle's Pills listing; caringvillage.com comparison pages |
 | NSAIDs generally avoided in CKD | inference | standard guidance; the product enforces a sourced plan constraint instead |
 | MCP `structuredContent` + text-block compatibility; `isError` for tool failures | inference | spec recall; verify against the 2025-11-25 spec text |
+
+## Appendix D — v1.2 implementation addendum (20 Oct 2026)
+Three additive changes surfaced during the build. Scope and the v1.1 tool intents are unchanged;
+this records what the running system now does.
+
+| # | Change | Why |
+|---|---|---|
+| 1 | Added a ninth tool, `resolve_request` (`approve` / `decline`) | §6.4 opened a pending request on refusal but §8 gave no tool to settle it. Refusals remain successful results; below `full`, resolving is refused and writes nothing |
+| 2 | Added an eighteenth event type, `authority.change_declined` | A decline is a decision, not a refusal. Reusing `authority.change_refused` would overwrite the refusal that R5 audits |
+| 3 | R5 closes when a request is approved *or* declined; `get_handoff` gains `pendingRequests`, and `settled` now requires an empty list | A settled request has answered the question R5 asks; the pending item needed a read path and a UI |
+
+`check_dose` is also described in tool metadata as a **plan-consistency** check rather than a
+safety verdict: it enforces the constraints recorded in the plan and does not recommend a dose.

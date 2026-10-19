@@ -82,6 +82,8 @@ function summarise(event: CareEvent): string {
       return `change to ${event.payload.medicationId} refused — requester role ${event.payload.requesterRole}`;
     case 'authority.change_applied':
       return `change to ${event.payload.medicationId} applied by ${displayNameFor(event.payload.appliedById)}`;
+    case 'authority.change_declined':
+      return `change to ${event.payload.medicationId} declined by ${displayNameFor(event.payload.declinedById)}`;
     case 'problem.acknowledged':
       return `finding ${event.payload.findingId} acknowledged`;
     case 'plan.constraint_set':

@@ -150,7 +150,7 @@ async function run(): Promise<void> {
     const version = shell.match(/Protocol\s*\n?\s*([\d-]+)/)?.[1];
     ok('protocol version shown', Boolean(version), version ?? 'not found');
     const toolCount = shell.match(/Tools\s*\n?\s*(\d+)/)?.[1];
-    ok('all 8 tools listed', toolCount === '8', `${toolCount ?? '?'} shown`);
+    ok('all 9 tools listed', toolCount === '9', `${toolCount ?? '?'} shown`);
 
     // ── Beat 1: findings render ────────────────────────────────────────────
     await page.getByRole('button', { name: 'Second look' }).click();
@@ -192,6 +192,43 @@ async function run(): Promise<void> {
         !/MCP error|-32602|output schema/i.test(refused),
     );
     await page.screenshot({ path: `${SHOTS}/03-beat2-refusal.png` });
+
+    // ── Beat 2.5: the loop closes — an authorised carer settles the request ─
+    // The refusal created a pending item; without this beat the demo shows the
+    // question but never the answer, and the newest tool goes unexercised in
+    // the only layer that can see a real output-schema violation.
+    await page.getByRole('radio', { name: /Priya/ }).click();
+    await page.waitForTimeout(1500);
+    await page.getByRole('tab', { name: 'Handover' }).click();
+    // Wait for the panel to land instead of guessing a delay: a persona switch
+    // reconnects, and the first fetch can run before the new session is ready.
+    await page
+      .getByText(/waiting for approval/i)
+      .first()
+      .waitFor({ timeout: 15_000 })
+      .catch(() => {});
+    const waiting = await page.evaluate(() => document.body.innerText);
+    // `innerText` reflects the rendered text, and the heading is uppercased in
+    // CSS — match case-insensitively or the check reads as a missing panel.
+    const approvalOffered =
+      /waiting for approval \([1-9]/i.test(waiting) && /approve/i.test(waiting);
+    ok(
+      'beat 2.5 offers the pending approval',
+      approvalOffered,
+      waiting.match(/waiting for approval \(\d+\)/i)?.[0] ?? 'not found',
+    );
+
+    if (approvalOffered) {
+      await page.getByRole('button', { name: 'Approve' }).first().click();
+      await page.waitForTimeout(2000);
+      const resolved = await page.evaluate(() => document.body.innerText);
+      ok('beat 2.5 records the approval', /Approved and recorded/i.test(resolved));
+    } else {
+      // A missing button is a failed check, not a harness error: report it and
+      // keep the remaining beats running.
+      ok('beat 2.5 records the approval', false, 'skipped — nothing to approve');
+    }
+    await page.screenshot({ path: `${SHOTS}/04-beat2.5-approval.png` });
 
     // ── Beat 3: dose verdict ───────────────────────────────────────────────
     await page.getByRole('button', { name: 'Can Tom give it?' }).click();

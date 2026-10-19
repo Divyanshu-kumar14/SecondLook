@@ -26,6 +26,8 @@ import {
   RecordDoseOutput,
   RequestRegimenChangeInput,
   RequestRegimenChangeOutput,
+  ResolveRequestInput,
+  ResolveRequestOutput,
 } from '../schemas/tools.js';
 import { identityFromHeaders, type HeaderBag, type ToolContext } from './_shared.js';
 import { checkDose } from './check_dose.js';
@@ -36,6 +38,7 @@ import { getHandoff } from './get_handoff.js';
 import { getTimeline } from './get_timeline.js';
 import { recordDose } from './record_dose.js';
 import { requestRegimenChange } from './request_regimen_change.js';
+import { resolveRequest } from './resolve_request.js';
 import type { Store } from '../store.js';
 
 
@@ -70,13 +73,15 @@ export function registerAllTools(mcp: McpServer, opts: RegisterOptions): void {
   mcp.registerTool(
     'check_dose',
     {
-      title: 'Check a dose before giving it',
+      title: 'Check a dose against the recorded care plan',
       description:
-        'Check whether it is safe to give a dose right now, WITHOUT recording it. ' +
-        'Use this BEFORE any medication is given. Returns a verdict of OK, CAUTION or ' +
-        'DO_NOT_GIVE with the reasons and what to do next. Example phrases: ' +
-        '"Can Tom give Dad his ibuprofen?", "Is it safe to give the Tylenol now?", ' +
-        '"Check the paracetamol before I give it". Writes nothing to the record.',
+        'Check whether giving a dose is consistent with the recorded care plan, WITHOUT ' +
+        'recording it. Use this BEFORE any medication is given. It reports what the ' +
+        'household recorded — it does not give medical advice and ships no dosage ' +
+        'recommendation. Returns a verdict of OK, CAUTION or DO_NOT_GIVE with the ' +
+        'reasons and what to do next. Example phrases: "Can Tom give Dad his ibuprofen?", ' +
+        '"Is it safe to give the Tylenol now?", "Check the paracetamol before I give it". ' +
+        'Writes nothing to the record.',
       inputSchema: shapeOf(CheckDoseInput),
       outputSchema: shapeOf(CheckDoseOutput),
     },
@@ -103,15 +108,32 @@ export function registerAllTools(mcp: McpServer, opts: RegisterOptions): void {
     {
       title: 'Ask to change a medication regimen',
       description:
-        'Ask to change how a medication is given. This is the ONLY tool that can refuse. ' +
-        'If the requester does not have authority, it is refused, the refusal is recorded, ' +
-        'and the request is left pending for an authorised caregiver to approve. ' +
+        'Ask to change how a medication is given. Refusable, unlike record_dose: if the ' +
+        'requester does not have authority, the change is refused, the refusal is ' +
+        'recorded, and the request is left pending for an authorised caregiver to ' +
+        'approve or decline with resolve_request. ' +
         'Example phrases: "Double Robert\'s acetaminophen", "Can we give the ibuprofen ' +
         'every four hours instead?", "She wants to change Dad\'s medication".',
       inputSchema: shapeOf(RequestRegimenChangeInput),
       outputSchema: shapeOf(RequestRegimenChangeOutput),
     },
     bind(requestRegimenChange),
+  );
+
+  mcp.registerTool(
+    'resolve_request',
+    {
+      title: 'Approve or decline a pending regimen change',
+      description:
+        'Settle a request that was refused and left pending: approve it or decline it. ' +
+        'Only a full-authority caregiver may decide. Approving records the decision in ' +
+        'the audit log; declining leaves the regimen as it is. Either way the request ' +
+        'stops being pending. Example phrases: "Priya, approve the change", ' +
+        '"Allow the extra painkillers", "Say no to that request".',
+      inputSchema: shapeOf(ResolveRequestInput),
+      outputSchema: shapeOf(ResolveRequestOutput),
+    },
+    bind(resolveRequest),
   );
 
   mcp.registerTool(

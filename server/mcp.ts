@@ -82,7 +82,7 @@ export class McpSessionManager {
       { name: 'second-look', version: '0.1.0' },
       { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
     );
-    // Phase 3 supplies all eight tools (P3-1..P3-8).
+    // Phase 3 supplies all nine tools (P3-1..P3-8, plus resolve_request).
     this.#registerTools?.(mcp);
     return mcp;
   }

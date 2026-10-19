@@ -1,5 +1,5 @@
 /**
- * Shared tool schemas for the 8-tool MCP surface (PRD §8, Phase 0 task P0-5).
+ * Shared tool schemas for the 9-tool MCP surface (PRD §8, Phase 0 task P0-5).
  * These are the single source of truth for `inputSchema` / `outputSchema`.
  *
  * IDENTITY INVARIANT (PRD §5.4, plan P1-6): no tool may accept an `actorId`
@@ -67,7 +67,7 @@ export const RecordDoseOutput = z.object({
 export type RecordDoseIn = z.infer<typeof RecordDoseInput>;
 export type RecordDoseOut = z.infer<typeof RecordDoseOutput>;
 
-// ── 3. request_regimen_change — the ONLY refusing tool ────────────────────────
+// ── 3. request_regimen_change — refuses; a pending request remains (see 9) ────
 export const RequestRegimenChangeInput = z.object({
   medicationId: z.string().min(1),
   newDose: z.number().positive().optional(),
@@ -197,6 +197,21 @@ export const GetHandoffOutput = z.object({
       acknowledged: z.boolean().optional(),
     }),
   ),
+  /**
+   * Requests refused and left pending — settled by `resolve_request` (approve
+   * or decline), never by acknowledgment. Empty once every request is decided.
+   */
+  pendingRequests: z.array(
+    z.object({
+      requestId: z.string(),
+      medicationName: z.string(),
+      requesterName: z.string(),
+      requestedChange: z.string(),
+      reason: z.string(),
+      when: z.string(),
+      whoCan: z.string(),
+    }),
+  ),
   // Returned by the handler but previously undeclared — same -32602 defect.
   for: z.string(),
   asOf: z.string(),
@@ -204,10 +219,36 @@ export const GetHandoffOutput = z.object({
 export type GetHandoffIn = z.infer<typeof GetHandoffInput>;
 export type GetHandoffOut = z.infer<typeof GetHandoffOutput>;
 
+// ── 9. resolve_request — settle a pending request (closes the refusal loop) ───
+export const ResolveRequestInput = z.object({
+  requestId: z.string().min(1),
+  decision: z.enum(['approve', 'decline']),
+  note: z.string().min(1).optional(),
+});
+export const ResolveRequestOutput = z.object({
+  status: z.enum(['approved', 'declined', 'refused', 'already_decided']),
+  requestId: z.string(),
+  /** The written event, on the two branches that write one. */
+  eventId: z.string().optional(),
+  /** On `already_decided`: which way it was settled. */
+  decidedAs: z.enum(['approved', 'declined']).optional(),
+  refusal: z
+    .object({
+      code: z.string(),
+      whoCan: z.string(),
+      sinceWhen: z.string().optional(),
+    })
+    .optional(),
+  message: z.string(),
+});
+export type ResolveRequestIn = z.infer<typeof ResolveRequestInput>;
+export type ResolveRequestOut = z.infer<typeof ResolveRequestOutput>;
+
 export const TOOL_NAMES = [
   'check_dose',
   'record_dose',
   'request_regimen_change',
+  'resolve_request',
   'get_current_regimen',
   'find_problems',
   'explain_problem',
@@ -226,6 +267,11 @@ export const TOOL_CONTRACTS = {
     output: RequestRegimenChangeOutput,
     mutates: true,
   },
+  resolve_request: {
+    input: ResolveRequestInput,
+    output: ResolveRequestOutput,
+    mutates: true,
+  },
   get_current_regimen: { input: GetCurrentRegimenInput, output: GetCurrentRegimenOutput, mutates: false },
   find_problems: { input: FindProblemsInput, output: FindProblemsOutput, mutates: false },
   explain_problem: { input: ExplainProblemInput, output: ExplainProblemOutput, mutates: false },
@@ -239,5 +285,5 @@ export const TOOL_CONTRACTS = {
 /** Tools that are allowed to write to the event log. */
 export const WRITE_TOOLS = TOOL_NAMES.filter((n) => TOOL_CONTRACTS[n].mutates);
 
-/** Tools that are allowed to refuse a caller. Only one, by design. */
-export const REFUSING_TOOLS: readonly ToolName[] = ['request_regimen_change'];
+/** Tools that are allowed to refuse a caller. Only the authority tools, by design. */
+export const REFUSING_TOOLS: readonly ToolName[] = ['request_regimen_change', 'resolve_request'];

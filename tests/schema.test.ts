@@ -57,10 +57,11 @@ describe('P0-3 · Zod 4 → JSON Schema (plan D2)', () => {
 });
 
 describe('P0-5 · shared event schemas', () => {
-  it('declares exactly the 17 event types from PRD §6.2', () => {
-    expect(EVENT_TYPES).toHaveLength(17);
-    expect(new Set(EVENT_TYPES).size).toBe(17);
+  it('declares exactly the 18 event types from PRD §6.2 plus the §8 addendum', () => {
+    expect(EVENT_TYPES).toHaveLength(18);
+    expect(new Set(EVENT_TYPES).size).toBe(18);
     expect(EVENT_TYPES).toContain('authority.change_refused');
+    expect(EVENT_TYPES).toContain('authority.change_declined');
     expect(EVENT_TYPES).toContain('problem.acknowledged');
   });
 
@@ -101,9 +102,9 @@ describe('P0-5 · shared event schemas', () => {
 });
 
 describe('P1-6 (front-loaded) · identity invariant', () => {
-  it('declares exactly the 8 tools from PRD §8', () => {
-    expect(TOOL_NAMES).toHaveLength(8);
-    expect(new Set(TOOL_NAMES).size).toBe(8);
+  it('declares exactly the 9 tools from PRD §8', () => {
+    expect(TOOL_NAMES).toHaveLength(9);
+    expect(new Set(TOOL_NAMES).size).toBe(9);
   });
 
   it('no WRITE tool accepts an actorId that could forge identity', () => {
@@ -122,8 +123,8 @@ describe('P1-6 (front-loaded) · identity invariant', () => {
     expect(TOOL_CONTRACTS.get_timeline.mutates).toBe(false);
   });
 
-  it('only request_regimen_change may refuse', () => {
-    expect(REFUSING_TOOLS).toEqual(['request_regimen_change']);
+  it('only the authority tools may refuse', () => {
+    expect(REFUSING_TOOLS).toEqual(['request_regimen_change', 'resolve_request']);
     // record_dose must accept and flag, never refuse (PRD §6.4).
     expect(WRITE_TOOLS).toContain('record_dose');
     expect(REFUSING_TOOLS).not.toContain('record_dose');

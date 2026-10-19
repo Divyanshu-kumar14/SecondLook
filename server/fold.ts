@@ -14,6 +14,7 @@ import type { CareEvent, Role, Source } from './schemas/events.js';
 // envelope, so narrowing on `event.type` already types `event.payload`.
 import type {
   AuthorityChangeApplied,
+  AuthorityChangeDeclined,
   AuthorityChangeRefused,
   AuthorityChangeRequested,
   DocumentAttached,
@@ -111,6 +112,8 @@ export interface CareState {
   changeRequests: Map<string, WithEventRef<AuthorityChangeRequested>>;
   refusals: Map<string, WithEventRef<AuthorityChangeRefused>>;
   appliedChanges: Map<string, WithEventRef<AuthorityChangeApplied>>;
+  /** Requests an authorised caregiver declined — settled, without applying. */
+  declinedChanges: Map<string, WithEventRef<AuthorityChangeDeclined>>;
   acknowledgedProblems: Set<string>;
   /** Index of last event folded, used for cache invalidation. */
   foldedThrough: number;
@@ -133,6 +136,7 @@ export function emptyCareState(): CareState {
     changeRequests: new Map(),
     refusals: new Map(),
     appliedChanges: new Map(),
+    declinedChanges: new Map(),
     acknowledgedProblems: new Set(),
     foldedThrough: -1,
   };
@@ -299,6 +303,17 @@ export function fold(events: readonly CareEvent[]): CareState {
         break;
       }
 
+      case 'authority.change_declined': {
+        const p = event.payload;
+        state.declinedChanges.set(p.requestId, {
+          ...p,
+          eventId: event.eventId,
+          ts: event.ts,
+          source: event.source,
+        });
+        break;
+      }
+
       case 'document.attached': {
         state.documents.push({
           ...event.payload,
@@ -316,7 +331,7 @@ export function fold(events: readonly CareEvent[]): CareState {
       }
 
       default: {
-        // Exhaustiveness guard: adding an 18th event type breaks the build here
+        // Exhaustiveness guard: adding a 19th event type breaks the build here
         // rather than silently dropping data at runtime.
         const unhandled: never = event;
         throw new Error(`Unhandled event: ${JSON.stringify(unhandled)}`);

@@ -66,7 +66,7 @@ describe('P4-2 · utterance router', () => {
     }
   });
 
-  it('always routes to one of the eight tools with an object argument', () => {
+  it('always routes to one of the nine tools with an object argument', () => {
     for (const { text } of EXAMPLES) {
       const r = route(text, priya);
       expect(typeof r.tool).toBe('string');

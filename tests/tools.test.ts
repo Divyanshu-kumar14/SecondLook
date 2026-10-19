@@ -11,9 +11,11 @@ import { Store } from '../server/store.js';
 import { registerAllTools } from '../server/tools/index.js';
 import { TOOL_NAMES } from '../server/schemas/tools.js';
 import { requestRegimenChange } from '../server/tools/request_regimen_change.js';
+import { resolveRequest } from '../server/tools/resolve_request.js';
 import { recordDose } from '../server/tools/record_dose.js';
 import { guestContext } from '../server/tools/_shared.js';
 import { GUEST, resolveIdentity } from '../server/identity.js';
+import { allRuleHits } from '../server/rules/index.js';
 
 let store: Store;
 
@@ -58,7 +60,7 @@ const structured = (result: unknown): Record<string, unknown> =>
   (result as { structuredContent?: Record<string, unknown> }).structuredContent ?? {};
 
 describe('P3-7 · every tool satisfies the result contract', () => {
-  it('registers exactly the 8 tools from the PRD', async () => {
+  it('registers exactly the 9 tools from the PRD', async () => {
     await withServer(async (client) => {
       const tools = await client.listTools();
       expect(tools.tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
@@ -162,6 +164,17 @@ describe('P3-7 · every tool satisfies the result contract', () => {
         ]),
       );
 
+      // `resolve_request` needs a real pending request. Asking without a token
+      // refuses and leaves one; the resolve below then takes its refused branch
+      // through the same real-client output-schema validation as the rest.
+      const asked = await call(client, 'request_regimen_change', {
+        medicationId: 'med-acetaminophen',
+        reason: 'contract check',
+        newDose: 1000,
+      });
+      const requestId = (asked.structuredContent as { pendingRequestId: string })
+        .pendingRequestId;
+
       const calls: [string, Record<string, unknown>][] = [
         ['get_current_regimen', { personId: PERSON_ID }],
         ['find_problems', { personId: PERSON_ID }],
@@ -173,6 +186,7 @@ describe('P3-7 · every tool satisfies the result contract', () => {
           reason: 'contract check',
           newDose: 1000,
         }],
+        ['resolve_request', { requestId, decision: 'approve' }],
         ['explain_problem', { findingId }],
         ['get_timeline', { personId: PERSON_ID, type: 'authority.*' }],
         ['get_handoff', { personId: PERSON_ID, toCaregiverId: 'caregiver-priya' }],
@@ -371,6 +385,164 @@ describe('P3-5 · get_handoff is only settled when nothing is outstanding', () =
       );
       const blocking = (payload.unresolved as { blocking: boolean }[]).filter((u) => u.blocking);
       expect(blocking.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('DoD #4b · resolve_request closes the loop request_regimen_change opens', () => {
+  const asPriya = () => ({
+    ...guestContext(store, AS_OF, PERSON_ID),
+    identity: resolveIdentity('Bearer demo-priya'),
+  });
+
+  /** Tom (role record) asks for a change: refused, logged, and left pending. */
+  function askAsTom(): string {
+    const result = requestRegimenChange(
+      {
+        ...guestContext(store, AS_OF, PERSON_ID),
+        identity: resolveIdentity('Bearer demo-tom'),
+      },
+      { medicationId: 'med-acetaminophen', newFrequency: 4, reason: 'more pain' },
+    );
+    const payload = result.structuredContent as { pendingRequestId?: string };
+    expect(payload.pendingRequestId, 'the ask must leave a pending request').toBeTruthy();
+    return String(payload.pendingRequestId);
+  }
+
+  it('a full-authority caregiver approving writes authority.change_applied', () => {
+    const requestId = askAsTom();
+    const before = store.log.length;
+
+    const result = resolveRequest(asPriya(), { requestId, decision: 'approve' });
+    const payload = result.structuredContent as {
+      status: string;
+      eventId: string;
+      message: string;
+    };
+
+    expect(result.isError).toBeFalsy();
+    expect(payload.status).toBe('approved');
+    expect(payload.message).toContain('Approved and recorded');
+    expect(store.log.length).toBe(before + 1);
+
+    const written = store.events().find((e) => e.eventId === payload.eventId);
+    expect(written?.type).toBe('authority.change_applied');
+    expect(written?.actorId).toBe('caregiver-priya');
+    expect((written?.payload as { requestId: string }).requestId).toBe(requestId);
+  });
+
+  it('approval closes the R5 item for that request; the refusal stays in the log', () => {
+    const requestId = askAsTom();
+    const openItems = () =>
+      allRuleHits(store.careState(), AS_OF).filter((h) => h.groupKey === `request:${requestId}`);
+
+    expect(openItems().length).toBe(1);
+    resolveRequest(asPriya(), { requestId, decision: 'approve' });
+    expect(openItems().length).toBe(0);
+    // The refusal itself is never deleted — the audit keeps both sides.
+    expect(store.events().some((e) => e.type === 'authority.change_refused')).toBe(true);
+  });
+
+  it('declining records the decision, settles the request, and leaves the regimen alone', () => {
+    const requestId = askAsTom();
+    const plan = () => store.careState().medications.get('med-acetaminophen')!.frequencyHours.value;
+    const planBefore = plan();
+
+    const result = resolveRequest(asPriya(), {
+      requestId,
+      decision: 'decline',
+      note: 'not on the pharmacist plan',
+    });
+    const payload = result.structuredContent as {
+      status: string;
+      eventId: string;
+      message: string;
+    };
+
+    expect(payload.status).toBe('declined');
+    expect(payload.message).toContain('stays as it is');
+
+    const written = store.events().find((e) => e.eventId === payload.eventId);
+    expect(written?.type).toBe('authority.change_declined');
+    expect((written?.payload as { reason?: string }).reason).toBe('not on the pharmacist plan');
+
+    expect(plan()).toBe(planBefore);
+    expect(
+      allRuleHits(store.careState(), AS_OF).filter((h) => h.groupKey === `request:${requestId}`),
+    ).toHaveLength(0);
+  });
+
+  it('refuses a caller below full authority — successfully, and writes NOTHING', () => {
+    const requestId = askAsTom();
+    const before = store.log.length;
+
+    const result = resolveRequest(
+      { ...guestContext(store, AS_OF, PERSON_ID), identity: GUEST },
+      { requestId, decision: 'approve' },
+    );
+    const payload = result.structuredContent as {
+      status: string;
+      refusal?: { code: string; whoCan: string };
+      message: string;
+    };
+
+    // A refusal is a SUCCESSFUL result, never an error (PRD §6.4).
+    expect(result.isError).toBeFalsy();
+    expect(payload.status).toBe('refused');
+    expect(payload.refusal).toMatchObject({
+      code: 'UNAUTHORIZED_PLAN_CHANGE',
+      whoCan: 'full-authority caregiver',
+    });
+    expect(payload.message).toContain('stays pending');
+    expect(store.log.length).toBe(before);
+  });
+
+  it('answers a second decision instead of applying one twice', () => {
+    const requestId = askAsTom();
+    resolveRequest(asPriya(), { requestId, decision: 'approve' });
+    const afterFirst = store.log.length;
+
+    const second = resolveRequest(asPriya(), { requestId, decision: 'decline' });
+    const payload = second.structuredContent as {
+      status: string;
+      decidedAs: string;
+      eventId: string;
+    };
+
+    expect(second.isError).toBeFalsy();
+    expect(payload.status).toBe('already_decided');
+    expect(payload.decidedAs).toBe('approved');
+    expect(payload.eventId).toBeTruthy();
+    expect(store.log.length).toBe(afterFirst);
+  });
+
+  it('rejects an unknown request with a structured error', () => {
+    const result = resolveRequest(asPriya(), {
+      requestId: 'req-does-not-exist',
+      decision: 'approve',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: 'UNKNOWN_REQUEST' });
+  });
+
+  it('get_handoff lists the request while pending and drops it once settled', async () => {
+    const requestId = askAsTom();
+    await withServer(async (client) => {
+      const pending = async () =>
+        structured(
+          await call(client, 'get_handoff', {
+            personId: PERSON_ID,
+            toCaregiverId: 'caregiver-priya',
+          }),
+        ).pendingRequests as { requestId: string; requesterName: string }[];
+
+      const before = await pending();
+      const mine = before.find((p) => p.requestId === requestId);
+      expect(mine, 'the pending request must be offered to the caregiver').toBeTruthy();
+      expect(mine!.requesterName).toBe('Tom');
+
+      resolveRequest(asPriya(), { requestId, decision: 'approve' });
+      expect((await pending()).some((p) => p.requestId === requestId)).toBe(false);
     });
   });
 });

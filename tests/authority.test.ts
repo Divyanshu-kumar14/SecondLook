@@ -31,6 +31,12 @@ describe('P1-7 · authority matrix', () => {
     expect(ROLES_THAT_MAY_CHANGE).toEqual(['full']);
   });
 
+  it('grants resolve_plan_change to full only — settling is a plan change too', () => {
+    expect(hasPermission('full', 'resolve_plan_change')).toBe(true);
+    expect(hasPermission('record', 'resolve_plan_change')).toBe(false);
+    expect(hasPermission('none', 'resolve_plan_change')).toBe(false);
+  });
+
   it('covers every permission for every role, with no branch left untested', () => {
     for (const role of ROLES) {
       const granted = permissionsFor(role);

@@ -53,6 +53,16 @@ interface AuditEvent {
   summary: string;
 }
 
+interface PendingRequest {
+  requestId: string;
+  medicationName: string;
+  requesterName: string;
+  requestedChange: string;
+  reason: string;
+  when: string;
+  whoCan: string;
+}
+
 interface Handoff {
   situation: string;
   background: string;
@@ -61,12 +71,14 @@ interface Handoff {
   settled: boolean;
   for?: string;
   unresolved: { item: string; kind: string; blocking: boolean; whoMustResolve: string }[];
+  pendingRequests: PendingRequest[];
 }
 
 export function RecordPanel({
   view,
   onViewChange,
   call,
+  canResolve,
   findings,
   evidenceByFinding,
   evidenceLoading,
@@ -74,6 +86,8 @@ export function RecordPanel({
   view: RecordView;
   onViewChange: (view: RecordView) => void;
   call: (name: string, args: Record<string, unknown>) => Promise<CallResult>;
+  /** Only a full-authority carer may settle a pending request. */
+  canResolve: boolean;
   findings?: Finding[];
   evidenceByFinding: Record<string, EvidenceItem[]>;
   evidenceLoading: boolean;
@@ -132,7 +146,7 @@ export function RecordPanel({
         ) : null}
 
         {view === 'audit' ? <AuditLog call={call} /> : null}
-        {view === 'handover' ? <HandoverPanel call={call} /> : null}
+        {view === 'handover' ? <HandoverPanel call={call} canResolve={canResolve} /> : null}
       </div>
     </section>
   );
@@ -203,9 +217,18 @@ function AuditLog({ call }: { call: (n: string, a: Record<string, unknown>) => P
  * must resolve it. `settled` is false whenever anything is outstanding, and an
  * acknowledged problem is still outstanding — being seen is not being fixed.
  */
-function HandoverPanel({ call }: { call: (n: string, a: Record<string, unknown>) => Promise<CallResult> }) {
+function HandoverPanel({
+  call,
+  canResolve,
+}: {
+  call: (n: string, a: Record<string, unknown>) => Promise<CallResult>;
+  canResolve: boolean;
+}) {
   const [data, setData] = useState<Handoff | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,7 +245,26 @@ function HandoverPanel({ call }: { call: (n: string, a: Record<string, unknown>)
     return () => {
       cancelled = true;
     };
-  }, [call]);
+  }, [call, reload]);
+
+  /**
+   * Settle a pending request. Below `full` the server refuses with a SUCCESSFUL
+   * result, so `isError` means a real failure — and a refresh only happens when
+   * the decision was actually written.
+   */
+  async function resolve(requestId: string, decision: 'approve' | 'decline') {
+    setBusyId(`${requestId}:${decision}`);
+    setResolution(null);
+    try {
+      const r = await call('resolve_request', { requestId, decision });
+      setResolution(typeof r.structured.message === 'string' ? r.structured.message : 'Done.');
+      if (!r.isError) setReload((n) => n + 1);
+    } catch (err: unknown) {
+      setResolution(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (error) return <p className="text-sm text-critical">Could not build the handover: {error}</p>;
   if (!data)
@@ -270,6 +312,58 @@ function HandoverPanel({ call }: { call: (n: string, a: Record<string, unknown>)
           <dd className="mt-0.5">{data.recommendation}</dd>
         </div>
       </dl>
+
+      <div>
+        <h3 className="mb-2 text-[0.7rem] tracking-[0.08em] text-ink-faint uppercase">
+          Waiting for approval ({data.pendingRequests.length})
+        </h3>
+        {data.pendingRequests.length === 0 ? (
+          <p className="text-sm text-ink-soft">Nothing is waiting on a decision.</p>
+        ) : (
+          <ol className="grid gap-2">
+            {data.pendingRequests.map((pending) => (
+              <li key={pending.requestId} className="rounded border border-rule bg-card px-3 py-2">
+                <p className="text-[0.82rem]">
+                  <strong className="font-medium">{pending.requesterName}</strong> asked to change{' '}
+                  {pending.medicationName} — {pending.requestedChange}.
+                </p>
+                <p className="mt-0.5 text-[0.72rem] text-ink-faint">
+                  “{pending.reason}” · requested {pending.when} · only {pending.whoCan} can decide
+                </p>
+                {canResolve ? (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void resolve(pending.requestId, 'approve')}
+                      disabled={busyId !== null}
+                      className="rounded-ctl bg-ink px-3 py-1.5 text-[0.78rem] text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
+                    >
+                      {busyId === `${pending.requestId}:approve` ? 'Approving…' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void resolve(pending.requestId, 'decline')}
+                      disabled={busyId !== null}
+                      className="rounded-ctl border border-rule-strong bg-card px-3 py-1.5 text-[0.78rem] text-ink transition-colors hover:border-ink disabled:opacity-40"
+                    >
+                      {busyId === `${pending.requestId}:decline` ? 'Declining…' : 'Decline'}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-[0.72rem] text-ink-faint">
+                    Only a {pending.whoCan} can decide this.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+        {resolution ? (
+          <p role="status" className="mt-2 text-[0.78rem] text-ink-soft">
+            {resolution}
+          </p>
+        ) : null}
+      </div>
 
       <div>
         <h3 className="mb-2 text-[0.7rem] tracking-[0.08em] text-ink-faint uppercase">

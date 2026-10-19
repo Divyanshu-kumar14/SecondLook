@@ -153,6 +153,15 @@ export const AuthorityChangeAppliedPayload = z.object({
 });
 export type AuthorityChangeApplied = z.infer<typeof AuthorityChangeAppliedPayload>;
 
+export const AuthorityChangeDeclinedPayload = z.object({
+  personId: z.string().min(1),
+  medicationId: z.string().min(1),
+  requestId: z.string().min(1),
+  declinedById: z.string().min(1),
+  reason: z.string().min(1).optional(),
+});
+export type AuthorityChangeDeclined = z.infer<typeof AuthorityChangeDeclinedPayload>;
+
 export const DocumentAttachedPayload = z.object({
   personId: z.string().min(1),
   title: z.string().min(1),
@@ -167,7 +176,7 @@ export const ProblemAcknowledgedPayload = z.object({
 });
 export type ProblemAcknowledged = z.infer<typeof ProblemAcknowledgedPayload>;
 
-// ── Discriminated union of all 17 event types (PRD §6.2) ──────────────────────
+// ── Discriminated union of all 18 event types (PRD §6.2 + §8 addendum) ────────
 
 export const EVENT_TYPES = [
   'person.registered',
@@ -185,6 +194,7 @@ export const EVENT_TYPES = [
   'authority.change_requested',
   'authority.change_refused',
   'authority.change_applied',
+  'authority.change_declined',
   'document.attached',
   'problem.acknowledged',
 ] as const;
@@ -209,6 +219,7 @@ export const PAYLOAD_SCHEMAS = {
   'authority.change_requested': AuthorityChangeRequestedPayload,
   'authority.change_refused': AuthorityChangeRefusedPayload,
   'authority.change_applied': AuthorityChangeAppliedPayload,
+  'authority.change_declined': AuthorityChangeDeclinedPayload,
   'document.attached': DocumentAttachedPayload,
   'problem.acknowledged': ProblemAcknowledgedPayload,
 } as const satisfies Record<EventType, z.ZodType>;
@@ -238,6 +249,7 @@ export const EventBodySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('authority.change_requested'), payload: AuthorityChangeRequestedPayload }),
   z.object({ type: z.literal('authority.change_refused'), payload: AuthorityChangeRefusedPayload }),
   z.object({ type: z.literal('authority.change_applied'), payload: AuthorityChangeAppliedPayload }),
+  z.object({ type: z.literal('authority.change_declined'), payload: AuthorityChangeDeclinedPayload }),
   z.object({ type: z.literal('document.attached'), payload: DocumentAttachedPayload }),
   z.object({ type: z.literal('problem.acknowledged'), payload: ProblemAcknowledgedPayload }),
 ]);

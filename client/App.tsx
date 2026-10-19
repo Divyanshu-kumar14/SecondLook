@@ -422,6 +422,7 @@ function Console() {
             view={view}
             onViewChange={setView}
             call={call}
+            canResolve={persona.role === 'full'}
             findings={latestFindingTurn?.findings}
             evidenceByFinding={latestFindingTurn?.evidence ?? {}}
             evidenceLoading={evidenceLoading}
@@ -449,7 +450,8 @@ function Console() {
           </section>
 
           <p className="border-t border-rule pt-4 text-[0.72rem] leading-relaxed text-ink-faint">
-            Synthetic data. Not a medical device. Utterance routing and phrasing are{' '}
+            Synthetic data. Not a medical device, and not a substitute for professional medical
+            advice. Utterance routing and phrasing are{' '}
             <strong className="font-medium text-ink-soft">simulated</strong> — Alexa+ generates
             its own.
           </p>

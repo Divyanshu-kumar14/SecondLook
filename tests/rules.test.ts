@@ -271,6 +271,40 @@ describe('P2-6 · R5 UNAUTHORIZED_PLAN_CHANGE', () => {
     expect(r5UnauthorizedPlanChange(stateOf([...base, request('caregiver-elena', 'none'), late]), AS_OF)).toHaveLength(0);
   });
 
+  it('stops firing once an authorised caregiver approved the request', () => {
+    const approved = {
+      type: 'authority.change_applied' as const,
+      payload: { personId: PERSON, medicationId: MED_A, requestId: 'req-1', appliedById: 'caregiver-priya' },
+      actorId: 'caregiver-priya',
+      actorRole: 'full' as const,
+      source: 'caregiver' as const,
+      ts: at(5, '09:00'),
+    };
+    expect(
+      r5UnauthorizedPlanChange(
+        stateOf([...base, request('caregiver-elena', 'none'), refusal('caregiver-elena', 'none'), approved]),
+        AS_OF,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('stops firing once the request was declined — settled either way', () => {
+    const declined = {
+      type: 'authority.change_declined' as const,
+      payload: { personId: PERSON, medicationId: MED_A, requestId: 'req-1', declinedById: 'caregiver-priya' },
+      actorId: 'caregiver-priya',
+      actorRole: 'full' as const,
+      source: 'caregiver' as const,
+      ts: at(5, '09:00'),
+    };
+    expect(
+      r5UnauthorizedPlanChange(
+        stateOf([...base, request('caregiver-elena', 'none'), refusal('caregiver-elena', 'none'), declined]),
+        AS_OF,
+      ),
+    ).toHaveLength(0);
+  });
+
   it('names the requester and their role', () => {
     const hits = r5UnauthorizedPlanChange(stateOf([...base, request('caregiver-elena', 'none'), refusal('caregiver-elena', 'none')]), AS_OF);
     expect(hits[0]!.what).toMatch(/role none/);

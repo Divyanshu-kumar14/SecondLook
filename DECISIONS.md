@@ -399,3 +399,32 @@ output-schema validation, and curl does not implement it either — those are th
 existing check used. Verification now runs through a real client over a real transport
 (`npm run verify-ui`), and the regression test asserts on returned keys rather than on transport
 behaviour, so it holds wherever it runs.
+
+## D28 — The refusal loop closes with a second authority act, not an edit of the first *(new, v1.2)*
+**Status: RESOLVED**
+
+`request_regimen_change` refused an unauthorised request and left it pending; nothing could settle
+it. The demo showed the refusal and the pending item, but not the answer — the loop the product is
+built around stopped one step short.
+
+**Decision.** Add `resolve_request` as the ninth tool — same authority as making a plan change
+(`full`), with the same structured refusal below it. Approving appends
+`authority.change_applied`; declining appends a new eighteenth event type,
+`authority.change_declined`.
+
+**Why a new event type rather than reusing `authority.change_refused`.** Refusals are keyed by
+request id in the fold (`state.refusals`), and R5 reads that map. Writing a decline into it would
+overwrite the original refusal — losing who asked and why — and R5's "one hit per request" logic
+would then read a mutation of the event it is meant to audit. A decline is a different fact: the
+request was answered, not refused.
+
+**Why approval does not mutate the regimen.** The PRD keeps `med.changed` prescriber-side. An
+approved household request is recorded as authority exercised (`authority.change_applied`) and
+declared settled; it does not silently rewrite the medication. That is the minimal complete loop,
+and it keeps the demo's central invariant: a household can grant permission, not practise medicine.
+
+**Consequences.** R5 stops firing once a request is approved *or* declined — settled either way,
+with the refusal still in the audit log. `get_handoff` gains `pendingRequests` (no tenth tool), and
+`settled` now requires that list to be empty. Resolving twice returns `already_decided` and writes
+nothing. Below `full`, `resolve_request` refuses with a successful result and writes nothing, so the
+request stays pending.

@@ -1,14 +1,16 @@
 /**
  * `get_handoff` — "Hand off to Priya." (P3-5, SBAR)
  *
- * `settled` is FALSE whenever `unresolved` is non-empty (PRD §8). An
- * acknowledgement does NOT resolve a finding — it records that a human has seen
- * it — so acknowledged-but-unresolved findings stay on the list with their
- * acknowledgement state intact.
+ * `settled` is FALSE whenever `unresolved` OR `pendingRequests` is non-empty
+ * (PRD §8). An acknowledgement does NOT resolve a finding — it records that a
+ * human has seen it — so acknowledged-but-unresolved findings stay on the list
+ * with their acknowledgement state intact. A pending request is settled only by
+ * `resolve_request`, never by being read.
  */
+import { WHO_MAY_CHANGE } from '../authority.js';
 import { findProblems } from '../rules/index.js';
 import { displayNameFor } from '../identity.js';
-import { fail, ok, type ToolContext } from './_shared.js';
+import { fail, ok, when, type ToolContext } from './_shared.js';
 import {
   GetHandoffInput,
   GetHandoffOutput,
@@ -49,6 +51,26 @@ export function getHandoff(ctx: ToolContext, raw: unknown): CallToolResult {
     ...(f.acknowledged ? { acknowledged: true } : {}),
   }));
 
+  // A request still waiting for an authorised caregiver is exactly the kind of
+  // open item a handover must carry: it is not resolved by read access, only by
+  // someone who can say yes. Oldest first, so the queue reads like a queue.
+  const decidedIds = new Set([
+    ...state.appliedChanges.keys(),
+    ...state.declinedChanges.keys(),
+  ]);
+  const pendingRequests = [...state.changeRequests.values()]
+    .filter((r) => !decidedIds.has(r.requestId))
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.requestId.localeCompare(b.requestId))
+    .map((r) => ({
+      requestId: r.requestId,
+      medicationName: state.medications.get(r.medicationId)?.name.value ?? r.medicationId,
+      requesterName: displayNameFor(r.requesterId),
+      requestedChange: describeChange(r.newDose, r.newFrequency),
+      reason: r.reason,
+      when: when(r.ts),
+      whoCan: WHO_MAY_CHANGE,
+    }));
+
   const medicationNames = [...state.medications.values()].map((m) => {
     const status = m.status.value === 'active' ? 'active' : 'stopped';
     return `${m.name.value} ${m.doseMg.value} mg ${m.form.value} (${status})`;
@@ -65,9 +87,10 @@ export function getHandoff(ctx: ToolContext, raw: unknown): CallToolResult {
         ? 'Nothing was found in the record. This is not an all-clear: it means nothing is recorded that the rules can see.'
         : `${findings.length} unresolved item${findings.length === 1 ? '' : 's'}, worst severity ${findings[0]!.severity}.`,
     recommendation: buildRecommendation(findings),
-    // Never true while anything is unresolved.
-    settled: unresolved.length === 0,
+    // Never true while anything is unresolved or waiting on a decision.
+    settled: unresolved.length === 0 && pendingRequests.length === 0,
     unresolved,
+    pendingRequests,
     for: displayNameFor(toCaregiverId),
     asOf: ctx.asOf,
   };
@@ -101,4 +124,14 @@ function buildRecommendation(findings: ReturnType<typeof findProblems>): string 
   if (stop.length > 0) parts.push(`Stop giving: ${stop[0]!.what}`);
   if (rest.length > 0) parts.push(`Still open: ${rest.map((f) => f.rules.join('+')).join(', ')}.`);
   return parts.join(' ');
+}
+
+/** One phrase for what the requester asked for — used by the pending list. */
+function describeChange(newDose?: number, newFrequency?: number): string {
+  if (newDose !== undefined && newFrequency !== undefined) {
+    return `${newDose} mg every ${newFrequency} h`;
+  }
+  if (newDose !== undefined) return `${newDose} mg`;
+  if (newFrequency !== undefined) return `every ${newFrequency} h`;
+  return 'a change to the regimen';
 }

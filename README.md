@@ -44,7 +44,7 @@ happen at the moment it would help.
 
 Second Look keeps an **append-only, hash-chained** record of what was given, by
 whom, under which authority, and applies six rules that encode the constraints a
-care plan actually states. It exposes the result as **8 MCP tools**, each written
+care plan actually states. It exposes the result as **9 MCP tools**, each written
 as one customer intent, so an assistant can select them from how a person
 actually speaks.
 
@@ -56,11 +56,12 @@ Three properties do the real work:
   `NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, and every answer ships coverage
   beside it.
 - **Recording is never blocked; changing is.** A dose that already happened must
-  always be loggable by anyone. Only plan changes are refused.
+  always be loggable by anyone. Only plan changes are refused — and a refusal
+  leaves a pending request that an authorised carer can approve or decline.
 
 ## See it work in 60 seconds
 
-Open <http://127.0.0.1:8787> and follow three beats. Each one is a button in the
+Open <http://127.0.0.1:8787> and follow four beats. Each one is a button in the
 client, and each one is a real MCP tool call — never the log or the fold.
 
 1. **Second look** — asks *are we doing this right?* Three findings resolve in
@@ -68,7 +69,10 @@ client, and each one is a real MCP tool call — never the log or the fold.
 2. **Switch persona to Tom** (role `record`), then **Ask to change**. The request
    is refused, the refusal is written to the audit log, and a pending request is
    created for someone with authority.
-3. **Can Tom give it?** — asks whether Tom may give ibuprofen right now. The
+3. **Switch persona to Priya** (role `full`), open **Handover**, and **Approve**
+   the request. The decision is written to the audit log and the pending item
+   disappears — the loop the refusal opened is now closed.
+4. **Can Tom give it?** — asks whether Tom may give ibuprofen right now. The
    answer is no, and it names the evidence.
 
 Other buttons: **Record a dose**, **What is he on?**, **Audit log**. The right
@@ -99,7 +103,7 @@ actually negotiated during the handshake.
 flowchart TD
   U["Carer speaks or types"] --> C["client/App.tsx router"]
   C -->|"MCP over HTTP"| M["server/mcp.ts session, Origin"]
-  M --> T["server/tools - 8 tools"]
+  M --> T["server/tools - 9 tools"]
   T --> A["server/identity.ts actor"]
   T --> L["server/log.ts hash chain"]
   L --> F["server/fold.ts to CareState"]
@@ -111,18 +115,24 @@ One process serves both the MCP endpoint (`POST|GET|DELETE /mcp`) and the built
 client. The client is a *real* MCP client using the official SDK — it never reads
 the log or the fold, so every word rendered on screen came back from a tool.
 
-## The eight tools
+## The nine tools
 
 | Tool | Intent |
 | --- | --- |
-| `check_dose` | Is it safe to give this dose right now? Does not record. |
+| `check_dose` | Is giving this dose consistent with the care plan on record? Does not record. |
 | `record_dose` | Record that a dose has already been given. Never refused. |
-| `request_regimen_change` | Ask to change how a medication is given. The only refused tool. |
+| `request_regimen_change` | Ask to change how a medication is given. Refused below full authority; leaves a pending request. |
+| `resolve_request` | Approve or decline a pending request. Same authority as making one. |
 | `get_current_regimen` | What is currently recorded, with dose, frequency and provenance. |
 | `find_problems` | Are we doing this right? All rule hits, grouped and ranked. |
 | `explain_problem` | Which rule raised this, and the evidence behind it. |
 | `get_timeline` | What was recorded and when. Filterable — the audit log. |
-| `get_handoff` | Situation, background, assessment, recommendation, and what is still open. |
+| `get_handoff` | Situation, background, assessment, recommendation, what is still open, and what is waiting for approval. |
+
+`check_dose` answers a **consistency** question against the constraints in the
+recorded plan. It is not a dosage recommendation and not medical advice: the
+constraints come from the prescriber's record, and a human prescriber remains the
+only source of a plan change.
 
 ## The scenario
 
@@ -159,7 +169,9 @@ garbage token                    refused   -> guest
 ```
 
 The right-hand column is the pending request that was created, and who it was
-attributed to.
+attributed to. Switch to Priya and the **Handover** column offers it for
+approval; either decision lands in the audit log, and the pending item
+disappears once it is settled.
 
 The second row is the one that matters. The request claimed full privilege in its
 arguments and was still refused, and the pending request was attributed to the
@@ -182,10 +194,13 @@ authentication we do not enforce would mislead clients.
 | *(no header)* | — | `none` | Read only |
 
 **A real Alexa+ add-on would need** OAuth 2.1 authorization-code with PKCE (S256),
-the `resource` parameter set to the server's canonical URI, auth-server metadata
-at `/.well-known/oauth-authorization-server`, a 401 carrying `WWW-Authenticate`
-for unauthenticated requests, and a reachable remote URL with sub-500 ms round
-trips. None of that is simulated here.
+the `resource` parameter set to the server's canonical URI, a Protected Resource
+Metadata document (RFC 9728) at `/.well-known/oauth-protected-resource`, auth-server
+metadata at `/.well-known/oauth-authorization-server`, and a reachable remote URL
+with sub-500 ms round trips. One detail is easy to get backwards: an unauthenticated
+request must return **401 without `WWW-Authenticate`** — the platform lists that
+header as *Not Supported Yet*, so sending the challenge breaks the handshake
+instead of starting it. None of that is simulated here.
 
 **Out of scope for an MCP server:** the shared-speaker problem. If two people use
 one Echo, the server cannot tell them apart. That is a voice-profile concern, not
@@ -301,13 +316,13 @@ passed: 17   failed: 0
 ``` text
 $ npm run verify
   Test Files  13 passed (13)
-       Tests  207 passed (207)
-Lines        : 94.81% ( 311/328 )
+       Tests  219 passed (219)
+Lines        : 96.81% ( 334/345 )
 ```
 
 Coverage is scoped to the rules engine, the fold, the log and the authority
 model — the four places where a defect would be a safety problem. Current:
-**94.8 %** overall, **100 %** on `server/authority.ts` and on every rule.
+**96.8 %** overall, **100 %** on `server/authority.ts` and on every rule.
 
 ### Latency
 
@@ -413,7 +428,7 @@ Stated plainly, because the demo is more useful when its edges are known.
 
 We wrote down what happened, including the parts that went wrong.
 
-- [`DECISIONS.md`](DECISIONS.md) — 26 decisions with reasoning, including the two
+- [`DECISIONS.md`](DECISIONS.md) — the decisions with reasoning, including the two
   the plan expected to fail and did not.
 - [`FRICTION_LOG.md`](FRICTION_LOG.md) — 32 things that went wrong, what caused
   each, and what it cost.
