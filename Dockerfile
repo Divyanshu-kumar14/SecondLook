@@ -22,7 +22,6 @@ RUN npm ci --ignore-scripts
 COPY tsconfig.json tsconfig.build.json vite.config.ts ./
 COPY client ./client
 COPY server ./server
-COPY scripts ./scripts
 COPY fixtures ./fixtures
 
 RUN npm run build

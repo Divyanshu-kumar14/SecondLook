@@ -166,7 +166,13 @@ export class EventLog {
   append(inputs: NewEventInput[]): CareEvent[] {
     if (inputs.length === 0) return [];
 
-    const appended: CareEvent[] = [];
+    // Build into locals first, write to disk, and only then touch #events.
+    // Reversing the old order (mutate-then-write) meant a failed disk write
+    // left the process serving a phantom event the file never received —
+    // visible to every tool, invisible to verify-log, and lost on restart.
+    // Disk-first discards on failure instead: memory never outruns the log.
+    const staged: CareEvent[] = [];
+    const stagedStored: Record<string, unknown>[] = [];
     let prevHash = this.#events.at(-1)?.hash ?? GENESIS_HASH;
     let seq = this.#events.length;
 
@@ -177,8 +183,7 @@ export class EventLog {
 
       const body: EventBodyForHash = {
         eventId:
-          input.eventId ??
-          deterministicId('event', `${seq}:${input.type}:${input.ts}:${input.actorId}`),
+          input.eventId ?? deterministicId('event', `${seq}:${input.type}:${input.ts}:${input.actorId}`),
         seq,
         ts: input.ts,
         actorId: input.actorId,
@@ -191,18 +196,21 @@ export class EventLog {
       };
 
       const event: CareEvent = EventSchema.parse({ ...body, hash: computeHash(prevHash, body) });
-      appended.push(event);
-      this.#events.push(event);
+      staged.push(event);
       // We wrote exactly these keys, so the stored record is the event itself.
-      // Kept in step with `#events` so `verify()` always has something to hash.
-      this.#stored.push({ ...event });
+      stagedStored.push({ ...event });
       prevHash = event.hash;
       seq += 1;
     }
 
+    // The disk write is the commit point: if it throws, nothing above landed
+    // in memory either.
+    appendFileSync(this.#file, staged.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8');
+
+    this.#events.push(...staged);
+    this.#stored.push(...stagedStored);
     this.#frozen = Object.freeze([...this.#events]);
-    appendFileSync(this.#file, appended.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8');
-    return appended;
+    return staged;
   }
 
   /**

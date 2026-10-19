@@ -236,6 +236,31 @@ describe('P1-4 · the event types the §7 fixture does not produce', () => {
     expect(state.caregivers.get('caregiver-priya')!.role.value).toBe('record');
   });
 
+  it('folds authority.change_applied into appliedChanges', () => {
+    const { events } = logWith([
+      base.person,
+      base.joinPriya,
+      {
+        type: 'authority.change_applied',
+        payload: {
+          personId: 'p1',
+          medicationId: 'm1',
+          requestId: 'req-1',
+          appliedById: 'caregiver-priya',
+        },
+        actorId: 'caregiver-priya',
+        actorRole: 'full',
+        source: 'clinician',
+        ts: '2026-10-12T09:00:00.000Z',
+      },
+    ]);
+    const state = fold(events);
+    const applied = state.appliedChanges.get('req-1');
+    expect(applied).toBeTruthy();
+    expect(applied!.requestId).toBe('req-1');
+    expect(applied!.appliedById).toBe('caregiver-priya');
+  });
+
   it('folds med.changed, replacing dose/form/frequency and adding maxDailyMg', () => {
     const { events } = logWith([
       base.person,

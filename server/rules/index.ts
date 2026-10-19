@@ -5,8 +5,7 @@
  * the grouped findings and their golden snapshots do not depend on Map
  * iteration order or on which rule happens to be added first.
  */
-import { fold, type CareState } from '../fold.js';
-import type { CareEvent } from '../schemas/events.js';
+import type { CareState } from '../fold.js';
 import { r1DoseInterval } from './r1.js';
 import { r2DispenseMismatch } from './r2.js';
 import { r3SupersededInUse } from './r3.js';
@@ -37,11 +36,6 @@ export function allRuleHits(state: CareState, asOf: string): RuleHit[] {
 
 export function findProblems(state: CareState, asOf: string): Finding[] {
   return findingsFrom(state, allRuleHits(state, asOf));
-}
-
-/** Convenience: fold the events, then run the whole engine. */
-export function analyze(events: readonly CareEvent[], asOf: string): Finding[] {
-  return findProblems(fold(events), asOf);
 }
 
 export * from './types.js';

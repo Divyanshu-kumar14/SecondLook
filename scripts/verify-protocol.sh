@@ -7,6 +7,7 @@ set -uo pipefail
 BASE="${1:-http://127.0.0.1:8787}"
 ACC='Accept: application/json, text/event-stream'
 TMP=/tmp/opencode/.proto.$$
+trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP"
 pass=0; fail=0
 
@@ -71,7 +72,10 @@ code=$(hdr -X POST "$BASE/mcp" -H "$ACC" -H 'Content-Type: application/json' \
 [ "$code" = "404" ] && ok "unknown/terminated session id -> 404" || bad "expected 404, got $code"
 
 code=$(hdr -X DELETE "$BASE/mcp" -H "$ACC" -H "mcp-session-id: $SID")
-[ "$code" = "200" ] || [ "$code" = "405" ] && ok "DELETE terminates the session ($code)" || bad "DELETE returned $code"
+# Braces bind the || group; without them `a || b && c || d` skips BOTH the ok
+# and bad counters on any other status (found reading the sweep itself) — the
+# sweep would pass silently having checked one thing fewer.
+{ [ "$code" = "200" ] || [ "$code" = "405" ]; } && ok "DELETE terminates the session ($code)" || bad "DELETE returned $code"
 
 code=$(hdr -X POST "$BASE/mcp" -H "$ACC" -H 'Content-Type: application/json' \
         -H "mcp-session-id: $SID" -d '{"jsonrpc":"2.0","id":4,"method":"tools/list"}')
@@ -95,7 +99,7 @@ code=$(hdr -X POST "$BASE/mcp" -H "$ACC" -H 'Content-Type: application/json' \
         -H "mcp-session-id: $S2" \
         -d '{"jsonrpc":"2.0","id":7,"method":"tools/list"}')
 [ "$code" = "200" ] && ok "absent version -> assumed (not rejected)" || bad "absent version rejected with $code"
-note "SDK owns the supported set: $(grep -o 'LATEST[^,]*' /dev/null 2>/dev/null; echo 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05, 2024-10-07)"
+echo "SDK owns the supported set (streamableHttp.ts SUPPORTED_PROTOCOL_VERSIONS; client sends the latest it knows)"
 
 # ── 6 ────────────────────────────────────────────────────────────────────────
 echo "§9.6  Validate Origin on all connections (DNS-rebinding defence); invalid -> 403"
@@ -116,8 +120,10 @@ else note "could not confirm via ss/netstat; default config is HOST=127.0.0.1"; 
 echo "§9.8  GET /mcp -> SSE stream or 405; DELETE /mcp + session -> terminate or 405"
 code=$(hdr "$BASE/mcp" -H 'Accept: application/json')
 [ "$code" = "405" ] && ok "GET without Accept: text/event-stream -> 405" || bad "expected 405, got $code"
-code=$(hdr -X POST "$BASE/mcp" -H "$ACC" -H 'Content-Type: application/json' -d "$INIT" >/dev/null; echo 200)
+# Measure the init for real — hard-coding 200 here let a failed init masquerade.
+code=$(hdr -X POST "$BASE/mcp" -H "$ACC" -H 'Content-Type: application/json' -d "$INIT")
 S3=$(sid)
+[ "$code" = "200" ] && [ -n "$S3" ] || bad "init before DELETE check failed: $code"
 code=$(hdr -X DELETE "$BASE/mcp" -H "$ACC" -H "mcp-session-id: $S3")
 { [ "$code" = "200" ] || [ "$code" = "405" ]; } && ok "DELETE + session id -> $code" || bad "DELETE returned $code"
 

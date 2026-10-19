@@ -42,7 +42,7 @@ export function recordDose(ctx: ToolContext, raw: unknown): CallToolResult {
   const ts = at ?? ctx.asOf;
 
   // actorId/actorRole come from the resolved identity, never from the arguments.
-  const [event] = ctx.store.append([
+  const event = ctx.store.append([
     {
       type: 'dose.recorded',
       payload: { personId: med.personId, medicationId: med.id, amountMg: amount },
@@ -52,17 +52,7 @@ export function recordDose(ctx: ToolContext, raw: unknown): CallToolResult {
       ts,
       ...(note === undefined ? {} : {}),
     },
-  ]);
-
-  if (!event) {
-    // Fail loudly rather than returning a result with no event to point at.
-    return fail({
-      code: 'WRITE_FAILED',
-      message: 'The dose could not be appended to the log.',
-      missingFields: [],
-      suggestedFollowUp: ['Check the event log is writable and retry.'],
-    });
-  }
+  ])[0]!; // append() with non-empty input always returns the event
 
   // Re-run the engine over the record INCLUDING the new dose.
   const after = ctx.store.careState();
