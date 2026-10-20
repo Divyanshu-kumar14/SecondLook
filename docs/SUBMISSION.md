@@ -15,7 +15,7 @@ MCP tools, one per customer intent, each returning the event ids behind every cl
 asserted without evidence, and an empty result states what was empty instead of "all clear".
 Recording a dose is never blocked; plan changes are refused as a structured result, written to the
 audit log, and left as a pending request another carer can approve. Built during the submission
-window: 222 tests, 17/17 protocol conformance, MIT.
+window: 223 tests, 17/17 protocol conformance, MIT.
 
 ---
 
@@ -32,7 +32,7 @@ window: 222 tests, 17/17 protocol conformance, MIT.
 
 | Criterion | What we point to |
 | --- | --- |
-| **Tech Implementation** | 222 tests, 96.8 % line coverage on the rules, fold, log and authority paths; `npm run verify-protocol` 17/17 against a running server; append-only SHA-256 hash chain with a verifier that checks stored bytes; identity and authority resolved server-side, never from tool arguments. |
+| **Tech Implementation** | 223 tests, 96.8 % line coverage on the rules, fold, log and authority paths; `npm run verify-protocol` 17/17 against a running server; append-only SHA-256 hash chain with a verifier that checks stored bytes; identity and authority resolved server-side, never from tool arguments. |
 | **Design** | [`DESIGN.md`](../DESIGN.md): severity carried by tint + named label + dot (never colour alone), reduced motion honoured at both the Motion and CSS layers, an evidence drawer with loading/loaded/failed states, tabular figures for anything compared down a column. Screenshots in `docs/assets/`. |
 | **Potential Impact** | The problem is stated and bounded in the README; the handover is an SBAR that names *who must resolve* each open item; every answer carries what it scanned. The deployment path below is the honest distance to a real add-on. |
 | **Quality of the Idea** | The refusal → pending → approval loop: a refused plan change is a successful, renderable result that also writes an audit event and leaves work for someone with authority. Evidence ids on every claim. An unknown `personId` is refused with the id to use, so a typo can never read as "nothing is wrong". |
