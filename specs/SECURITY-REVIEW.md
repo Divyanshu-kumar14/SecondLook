@@ -1,12 +1,12 @@
 # P5-5 · Security review
 
-**Date:** Sun 18 Oct 2026
-**Reviewer:** the orchestrator. **The plan names a `security-auditor` agent that does not exist
-in this environment.** That was flagged rather than silently substituted; this is a manual review
-against the plan's own checklist, with every line below produced by running something.
+Date: Sun 18 Oct 2026
+Reviewer: the orchestrator. The plan names a `security-auditor` agent that does not exist in this
+environment, and that gap is recorded here. This is a manual review against the plan's own
+checklist. Every result below comes from a command that was run.
 
-**Verdict: no findings that block submission.** Two limits are stated rather than fixed, because
-fixing them is out of scope and hiding them would be worse.
+Verdict: no findings that block submission. Two limits are documented; fixing them is out of
+scope.
 
 ---
 
@@ -14,11 +14,11 @@ fixing them is out of scope and hiding them would be worse.
 
 | # | Check | Result | Evidence |
 |---|---|---|---|
-| 1 | Identity / authority surface | **PASS** | live matrix below |
-| 2 | No secrets | **PASS** | secret-shaped grep across all tracked files: no hits |
-| 3 | `.env.example` empty of values | **PASS** | 1202 bytes, **0** non-comment assignments |
-| 4 | JSONL gitignored | **PASS** | no `.jsonl` tracked; `.data/` ignored (confirmed via `git check-ignore`) |
-| 5 | No client-supplied `actorId` reachable | **PASS** | no tool schema declares `actorId`/`actorRole`; injection probe below |
+| 1 | Identity / authority surface | PASS | live matrix below |
+| 2 | No secrets | PASS | secret-shaped grep across all tracked files: no hits |
+| 3 | `.env.example` empty of values | PASS | 1202 bytes, 0 non-comment assignments |
+| 4 | JSONL gitignored | PASS | no `.jsonl` tracked; `.data/` ignored (confirmed via `git check-ignore`) |
+| 5 | No client-supplied `actorId` reachable | PASS | no tool schema declares `actorId`/`actorRole`; injection probe below |
 
 ---
 
@@ -29,10 +29,10 @@ Identity resolves in `server/identity.ts` from the `Authorization` header only:
 - `Bearer demo-priya` → role `full`
 - `Bearer demo-tom` → role `record`
 - `Bearer demo-elena` → role `none`
-- **anything else, malformed, or absent → `GUEST`, role `none`**
+- anything else, malformed, or absent → `GUEST`, role `none`
 
-`resolveIdentity` never throws, so a bad token cannot crash the server and cannot forge a role by
-sending garbage. It fails closed.
+`resolveIdentity` never throws, so a bad token cannot crash the server or forge a role; unknown
+input resolves to the guest role.
 
 ### Live matrix — `request_regimen_change`, one request per row
 
@@ -46,12 +46,11 @@ wrong scheme (Basic, not Bearer)             status=refused  pending=req-guest-�
 demo-elena (role: none)                      status=refused  pending=req-caregiver-elena-…
 ```
 
-**The load-bearing detail is row 2.** The request carried
+Row 2 is the important one. The request carried
 `actorId: "caregiver-priya"`, `actorRole: "full"` and `caregiverId: "caregiver-priya"` in its
-arguments. It was still refused, and the pending request it created is attributed to
-**`caregiver-tom`** — the identity from the bearer token, not the one the client asserted. This is
-the plan's fatal risk *"Refusal rests on undefined identity"* and it is closed by behaviour, not by
-a type.
+arguments. It was still refused, and the pending request is attributed to `caregiver-tom`, the
+identity from the bearer token rather than the one the client asserted. The plan's fatal risk,
+"Refusal rests on undefined identity", is closed by behaviour here.
 
 ### DoD #4 — refused, logged, and a pending request created
 
@@ -64,7 +63,7 @@ authority.change_requested  | guest             | guest asked to change med-ibup
 …7 refusals, 16 authority events total…
 ```
 
-No refusal was silently dropped, and none was attributed to the injected actor.
+None of the refusals was dropped, and none was attributed to the injected actor.
 
 The hash chain stayed intact across all seven refused writes (19 → 33 events):
 
@@ -76,38 +75,36 @@ The hash chain stayed intact across all seven refused writes (19 → 33 events):
 
 | Control | Evidence |
 |---|---|
-| Origin validation | `Origin: http://evil.example` → **403**; loopback and Vite dev origins → 200 |
-| DNS-rebinding allow-list | derived per request from `req.socket.localPort` (**D13**) |
+| Origin validation | `Origin: http://evil.example` → 403; loopback and Vite dev origins → 200 |
+| DNS-rebinding allow-list | derived per request from `req.socket.localPort` (D13) |
 | Loopback bind | `listening on 127.0.0.1:8787` (§9.7) |
 | Session enforcement | non-init without a session → 400; unknown/terminated → 404 |
-| Host header | validated against the live port, not the configured one (**D13**) |
+| Host header | validated against the live port, not the configured one (D13) |
 
 ---
 
 ## Two limits, stated rather than fixed
 
-**1 · The bearer tokens are public and labelled as demo personas.**
+1 · The bearer tokens are public and labelled as demo personas.
 `demo-priya` / `demo-tom` / `demo-elena` are seeded in the fixture and printed in the README. They
-are not secrets and are not pretending to be — PRD §10.3 rules out advertising OAuth we do not
-enforce. The consequence: **on a real deployment this is an open system.** Authority would come
-from the host platform's authenticated user context, not from a header any client can set. The
-demo deliberately does not solve that, and the README says so.
+are not secrets; PRD §10.3 rules out advertising OAuth we do not enforce. On a real deployment this
+is an open system: authority would come from the host platform's authenticated user context, not
+from a header any client can set. The demo deliberately does not solve that, and the README says
+so.
 
-**2 · A hash chain attests to integrity, not authorship.** Anyone who can rewrite the whole log can
-recompute every hash. Detecting *edits* works and is tested; detecting a *wholesale rewrite by a
-writer* would need signatures, which is out of scope for a local demo log and is not claimed
-anywhere in the README.
+2 · A hash chain attests to integrity, not authorship. Anyone who can rewrite the whole log can
+recompute every hash. Detecting edits works and is tested. Detecting a wholesale rewrite by a
+writer would need signatures, which are out of scope for a local demo log and are not claimed in
+the README.
 
 ---
 
 ## What would change before this handled real data
 
-Not a to-do list for the submission — a record of where the boundary is:
-
 1. Real authentication from the Alexa+ host context, replacing the static persona table.
 2. Signed events, or an external append-only anchor, to close limit 2.
 3. Encryption at rest for a log containing medication and health data. Currently a plain JSONL.
-4. A retention and deletion policy — append-only and "never delete" are in direct tension, and
-   that tension is unresolved rather than solved.
+4. A retention and deletion policy. Append-only and "never delete" are in direct tension, and
+   that tension is unresolved.
 
-Items 3 and 4 are the ones that would matter most, and neither is claimed as handled.
+Items 3 and 4 matter most, and neither is claimed as handled.

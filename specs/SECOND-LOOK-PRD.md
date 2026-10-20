@@ -1,11 +1,11 @@
 # Second Look — Household Care Reconciliation for Alexa+
-**Product Requirements Document (PRD) — v1.1** (supersedes v1.0)
+**Product Requirements Document (PRD) v1.1** (supersedes v1.0)
 
 > **Name:** Second Look. Tagline: *"Did we get it right today?"*
 > **Repo:** `github.com/Divyanshu-kumar14/second-look` · **Demo voice lines:** *"Alexa, give Dad's meds a second look."* / *"Alexa, can Tom give Dad his ibuprofen?"*
-> **Status:** Build-ready. **Primary track:** Amazon Developer Hackathon — **Alexa+**. **Minis:** see §12.1 (they stack with the track prize).
+> **Status:** Build-ready. **Primary track:** Amazon Developer Hackathon, Alexa+. **Minis:** see §12.1 (they stack with the track prize).
 > **Deadline:** Oct 23 2026, 12:00pm PDT = **Oct 24, 00:30 IST**. **Internal freeze:** Oct 23, 18:00 IST (05:30 PDT).
-> **Elevator:** *Ask Alexa one question — "are we doing this right?" — and hear the one thing that's off, the evidence behind it, and who can fix it. Ask before you give a pill and it tells you if the plan has changed. When someone without authority tries to change the plan, it says no — and tells them who can say yes.*
+> **Elevator:** *Ask Alexa one question, "are we doing this right?", and hear the one thing that's off, the evidence behind it, and who can fix it. Ask before you give a pill and it tells you if the plan has changed. When someone without authority tries to change the plan, it says no and tells them who can say yes.*
 
 **Evidence tags used in this document:** `[verified]` = checked against a primary/authoritative page during v1.1 validation (sources in Appendix C) · `[inference]` = reasoned, not directly sourced · `[unverified]` = could not be confirmed; do not cite externally.
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 1 | Removed 4 statistics; re-sourced the problem section | The 22.2%→16.0% figure is a 29-patient COPD pilot (not the cited journal); ~90%, 52.7% and Swiss Med Wkly "¼" could not be located. See Appendix C |
 | 2 | Corrected Alexa Together facts | Amazon's notice: no longer available (update May 21, 2025); it was a paid subscription. v1.0 said "~Jun 2024" and "unpaid" |
-| 3 | "Layer is open" → caution on willingness-to-pay | Amazon retired a paid caregiver subscription; that is a warning, not an opening |
+| 3 | "Layer is open" → caution on willingness-to-pay | Amazon retired a paid caregiver subscription, which is a warning about willingness to pay |
 | 4 | **Speaker identity specified** (bearer-token persona) | v1.0's headline refusal had no mechanism for knowing who is speaking |
 | 5 | **Demo language path specified** (phrasing layer, real mic input, optional Bedrock router, third-party-client clip) | v1.0 had no component that turns speech into tool calls or records into a sentence |
 | 6 | Tools 9 → 8: added `check_dose`; removed `who_can_do`, `get_audit_log` | Amazon's design guide: one intent per tool, avoid overlap. Prevention ("can I give this?") beats forensics |
@@ -38,31 +38,31 @@
 After hospital discharge, medication information is frequently wrong or misunderstood.
 - In a prospective cohort of older adults discharged home (heart failure, acute coronary syndrome, pneumonia), **307 patients (81.4%)** had a provider reconciliation error or did not understand at least one intended medication change `[verified]` (Ziaeian et al., *J Gen Intern Med* 2012).
 - Across **6,115** post-discharge reconciliations in Andalusian primary care, **73.7%** showed discrepancies and **50.6%** were classified as medication errors `[verified]` (González-López et al., *Applied Sciences* 2021).
-- A retrospective study of pharmacist-led telephone post-discharge reconciliation in geriatric primary care found 30-day inpatient admission of **6.4% with the program vs 14.7% usual care** (OR 2.54) `[verified]` (Liu et al., *J Aging Health* 2018). Observational; association, not proof.
+- A retrospective study of pharmacist-led telephone post-discharge reconciliation in geriatric primary care found 30-day inpatient admission of **6.4% with the program vs 14.7% usual care** (OR 2.54) `[verified]` (Liu et al., *J Aging Health* 2018). The study is observational, so the difference is an association and does not establish cause.
 
-**Evidence gap `[inference]`:** these studies measure discharge-document and clinician-side discrepancies. The failure Second Look targets — a *stale instruction reaching the bedside*, or *someone without authority administering or changing* — is plausible given them but is **not directly measured** in the sources used. Never present the readmission figures as Second Look's effect.
+**Evidence gap `[inference]`:** these studies measure discharge-document and clinician-side discrepancies. Second Look targets two failures they make plausible but do not measure: a *stale instruction reaching the bedside*, and *someone without authority administering or changing* the plan. Never present the readmission figures as Second Look's effect.
 
 ### 1.2 Landscape
-- Consumer tools — Medisafe ("Medfriend" missed-dose alerts), Jointly, Caring Village, Uncle's Pills — offer shared medication lists, reminders, missed-dose alerts and per-person dose logs `[verified: store listings and vendor comparison pages, May–Jul 2026; vendor-authored, not exhaustive]`.
-- Shared dose logs already address naive double-dosing, so **R1 is not a differentiator.** The differentiators are R3 (superseded order still in use), R4 (plan-barred drug class), R5/R6 (role-based refusal and flagging) `[inference: not described in the listings reviewed]`.
+- Consumer tools (Medisafe with "Medfriend" missed-dose alerts, Jointly, Caring Village, Uncle's Pills) offer shared medication lists, reminders, missed-dose alerts and per-person dose logs `[verified: store listings and vendor comparison pages, May–Jul 2026; vendor-authored, not exhaustive]`.
+- Shared dose logs already address naive double-dosing, so **R1 is not a differentiator.** The differentiators are R3 (superseded order still in use), R4 (plan-barred drug class) and R5/R6 (role-based refusal and flagging) `[inference: not described in the listings reviewed]`.
 - Clinician-side reconciliation is a professional workflow (CMS Medicare Advantage post-discharge reconciliation measure) `[unverified this pass — confirm before citing]`.
-- **Amazon precedent:** Alexa Together was a paid caregiver subscription and is **no longer available** (Amazon notice dated May 21, 2025; Alexa Emergency Assist is the replacement) `[verified]`. Treat this as a caution on standalone willingness-to-pay, **not** proof that "the layer is open". Second Look differs in kind — an on-demand decision with provenance, not subscription monitoring `[inference]`.
+- **Amazon precedent:** Alexa Together was a paid caregiver subscription and is **no longer available** (Amazon notice dated May 21, 2025; Alexa Emergency Assist is the replacement) `[verified]`. Treat this as a caution on standalone willingness-to-pay, not proof that "the layer is open". Second Look answers a question on demand and returns provenance; it is not subscription monitoring `[inference]`.
 
 ### 1.3 Goals
-- **G1** Make the household's care record **self-reconciling**: detect contradictions nobody would otherwise catch, without a clinician.
-- **G2** **Voice-first, screen-optional.** Lead with one finding; every answer complete as audio alone.
-- **G3** **Refuse** unauthorized plan changes, route the request to someone who can approve, and log the refusal as a first-class event. Identity comes from the token, never from tool arguments.
-- **G4** Be a **conformant MCP server** (spec 2025-11-25, Streamable HTTP) any MCP client can call.
-- **G5** **Zero-credential reproducibility:** `git clone && npm install && npm start`. No AWS account, no API keys, no database server, no native modules.
-- **G6** **No LLM in the reasoning path.** Findings are computed, deterministic, and cite event IDs. An LLM is permitted only at the edges (optional utterance routing; future document intake) and may only restate fields present in a typed record.
-- **G7** **Demo honesty.** The simulator is labelled as a simulator. The README states what real Alexa+ would supply (identity, speech) and what we substituted.
+- **G1** Make the household's care record self-reconciling: detect contradictions nobody would otherwise catch, without a clinician.
+- **G2** Voice-first, screen-optional. Lead with one finding; every answer works as audio alone.
+- **G3** Refuse unauthorized plan changes, route the request to someone who can approve, and log the refusal as a first-class event. Identity comes from the token, and tool arguments cannot change it.
+- **G4** Be a conformant MCP server (spec 2025-11-25, Streamable HTTP) that any MCP client can call.
+- **G5** Zero-credential reproducibility: `git clone && npm install && npm start`. No AWS account, no API keys, no database server, no native modules.
+- **G6** No LLM in the reasoning path. Findings are computed deterministically and cite event IDs. An LLM is permitted only at the edges (optional utterance routing; future document intake), and it may only restate fields present in a typed record.
+- **G7** Demo honesty. The simulator is labelled as a simulator. The README lists what real Alexa+ would supply (identity, speech) and what we substituted.
 
 ### 1.4 Non-goals
 - Not a medical device, not clinical decision support, not HIPAA-regulated. Synthetic data only.
-- Not an Alexa+ **add-on package**: `alexa-ai` CLI, MCP Toolkit, Category SDK and Web Simulator are in preview for select partners; participants cannot get access `[verified, Devpost FAQ]`. We ship a conformant MCP server and our own web MCP client, which the FAQ confirms satisfies the track.
+- Not an Alexa+ add-on package: `alexa-ai` CLI, MCP Toolkit, Category SDK and Web Simulator are in preview for select partners; participants cannot get access `[verified, Devpost FAQ]`. We ship a conformant MCP server and our own web MCP client, which the FAQ confirms satisfies the track.
 - Not a reminder app, EHR/FHIR client, pharmacy integration, multi-tenant SaaS, or hosted service (server need not stay live post-submit `[verified, FAQ]`).
 - Not a real OAuth 2.1 authorization server (§10.3).
-- **Document/label intake** (photo → structured events) is out of the build; it is named as the top adoption risk (§12.2) and appears as roadmap only.
+- Document/label intake (photo → structured events) is out of the build; it is named as the top adoption risk (§12.2) and appears as roadmap only.
 
 ### 1.5 Success metrics
 | Metric | Target | Why |
@@ -70,7 +70,7 @@ After hospital discharge, medication information is frequently wrong or misunder
 | Server-side tool latency | **p95 < 150ms** (Alexa+ budget is <500ms round trip `[verified]`) | HUD labels this "server time"; the 500ms budget also includes network `[inference]` |
 | `npm start` cold start | < 8s, zero config, no native build | Judges run it themselves; a locally runnable repo suffices `[verified, FAQ]` |
 | MCP conformance | `initialize`, `tools/list`, `tools/call` clean; Origin validated; session ID honored; verified with `curl` + MCP Inspector | Required spec ≥2025-11-25 `[verified]` |
-| Core rules firing on fixture | **R1–R6 fire; R7–R8 stretch** | Depth is judged less than a polished slice |
+| Core rules firing on fixture | **R1-R6 fire; R7-R8 stretch** | Judges value a polished slice over depth |
 | Unauthorized plan changes refused | **100%**, each with an audit event and a routed request | Core differentiator |
 | Tool design | 8 tools, one intent each, no overlapping inputs | Amazon design guide `[verified]` |
 | Demo video | **≤ 2:55**, English, public; best material in the first 60s | Judges need not watch past 3:00 `[verified]` |
@@ -81,17 +81,17 @@ After hospital discharge, medication information is frequently wrong or misunder
 ## 2. Users & Journeys
 
 **Personas (the household, not the patient):**
-- **Priya** — adult daughter, 10 min away. Role `full`: may change the plan.
-- **Tom** — adult son, evenings. Role `record`: may log doses and observations. Acts on the paper discharge summary.
-- **Elena** — neighbour. Role `none`: read-only. Helped for 20 minutes.
-- **Robert** — 74, post-hip-replacement, hypertension + CKD stage 3. The patient, not a user.
+- Priya, adult daughter, 10 min away. Role `full`: may change the plan.
+- Tom, adult son, evenings. Role `record`: may log doses and observations. Acts on the paper discharge summary.
+- Elena, neighbour. Role `none`: read-only. Helped for 20 minutes.
+- Robert, 74, post-hip-replacement, hypertension + CKD stage 3. The patient, not a user.
 
-**Who is speaking:** the bearer token on each request maps to one persona (§5.4). The client has a persona switcher. Real Alexa+ would supply identity via account linking and voice profiles; the server cannot observe voice-profile mismatch (anyone in the room can speak) — documented limitation.
+**Who is speaking:** the bearer token on each request maps to one persona (§5.4). The client has a persona switcher. Real Alexa+ would supply identity via account linking and voice profiles; the server cannot observe voice-profile mismatch, since anyone in the room can speak. The README documents this limitation.
 
 **Journeys**
 - **J1 Prevention (new):** *Tom: "Alexa, can I give Dad his ibuprofen?"* → `check_dose` → verdict `DO_NOT_GIVE`: stopped Day 3, and the plan bars NSAIDs. Same rules engine, run on a hypothetical dose; nothing written.
-- **J2 Second look (headline):** *Priya: "Alexa, give Dad's meds a second look."* → `find_problems` → one grouped finding: ibuprofen was stopped Day 3, yet 2 doses followed (Tom Day 5 from the discharge paper; Elena Day 5 evening); the plan bars NSAIDs for Robert. Framed as **stale information**, not fault.
-- **J3 Refusal (money shot):** *Tom: "Alexa, double Robert's acetaminophen."* → `request_regimen_change` returns `status: refused`, `whoCan: Priya`, writes `authority.change_refused`, and leaves a **pending request visible to Priya**. Audit entry appears live.
+- **J2 Second look (headline):** *Priya: "Alexa, give Dad's meds a second look."* → `find_problems` → one grouped finding: ibuprofen was stopped Day 3, yet 2 doses followed (Tom Day 5 from the discharge paper; Elena Day 5 evening); the plan bars NSAIDs for Robert. The finding is framed as stale information, not as blame.
+- **J3 Refusal (money shot):** *Tom: "Alexa, double Robert's acetaminophen."* → `request_regimen_change` returns `status: refused`, `whoCan: Priya`, writes `authority.change_refused`, and leaves a **pending request visible to Priya**. The audit entry appears live.
 - **J4 Handoff:** *Tom ends his shift.* → `get_handoff` returns SBAR-shaped transfer with `settled: false` and the unresolved items; it never presents gaps as settled.
 - **J5 Recall:** *"Who gave ibuprofen on Friday?"* → `get_timeline` with lineage.
 - **J0 Setup (out of demo):** events enter by voice/typing; document intake is roadmap.
@@ -100,33 +100,33 @@ After hospital discharge, medication information is frequently wrong or misunder
 
 ## 3. Scope, Phases & Schedule
 
-Deadline math: today is Sun Oct 18; freeze Fri Oct 23 18:00 IST. Estimates total ~28h; **plan for 1.5× (≈42h)** and use the cut lines in §12.3.
+Deadline math: today is Sun Oct 18; freeze Fri Oct 23 18:00 IST. Estimates total ~28h; plan for 1.5× (≈42h) and use the cut lines in §12.3.
 
 | Phase | Est. | Window (IST) | Exit criteria |
 |---|---|---|---|
 | **0 Foundations & contracts** | 3h | Oct 18 | One Node process on `:8787` serves `/mcp` and static client; SDK Streamable HTTP transport; Zod schemas shared; `Origin: https://evil.com` → 403; handshake with zero env vars |
-| **1 Event log & state** | 4h | Oct 18–19 | Append-only JSONL with hash chain; `fold()` deterministic with provenance; authority model; tamper test fails verification |
-| **2 Rules engine** | 5h | Oct 19–20 | R1–R6 pure, unit + integration tested; grouping + ranking deterministic; fixture fires all |
+| **1 Event log & state** | 4h | Oct 18-19 | Append-only JSONL with hash chain; `fold()` deterministic with provenance; authority model; tamper test fails verification |
+| **2 Rules engine** | 5h | Oct 19-20 | R1-R6 pure, unit + integration tested; grouping + ranking deterministic; fixture fires all |
 | **3 MCP tool surface** | 4h | Oct 20 | 8 tools, `outputSchema`, structured results and errors; p95 < 150ms; curl + Inspector transcripts saved |
 | **4 Demo client** | 7h | Oct 21 | Persona switcher, transcript, phrasing layer, mic in / speech out (optional), evidence drawer, audit log, protocol inspector, latency HUD |
-| **5 Hardening & submission** | 5h | Oct 22–23 | Clean-container run, README, video, product feedback, friction log, mini-challenge claims |
+| **5 Hardening & submission** | 5h | Oct 22-23 | Clean-container run, README, video, product feedback, friction log, mini-challenge claims |
 
-Rolling tasks: **start the friction log on Oct 18** and append as you hit friction (up to a 10% judging bonus `[verified]`). Mini-challenge go/no-go: **Oct 21 EOD**. Submit by **Oct 23, 18:00 IST**.
+Rolling tasks: start the friction log on Oct 18 and append as you hit friction (up to a 10% judging bonus `[verified]`). Mini-challenge go/no-go: Oct 21 EOD. Submit by Oct 23, 18:00 IST.
 
 ---
 
 ## 4. UX Requirements
 
-Design basis (Amazon Alexa+ MCP design guide `[verified]`): customers arrive by voice or touch, often multitasking; one tool = one customer intent; avoid overlapping tools; **you cannot script what Alexa says — you design the data it speaks from.** Responses may be visual and/or spoken; voice-only must work. (v1.0 quoted additional guide lines — "one decision per turn", the structured-errors sentence — that were not located in the pages retrieved; they are treated as our own design principles, not citations.)
+Design basis (Amazon Alexa+ MCP design guide `[verified]`): customers arrive by voice or touch, often multitasking; one tool = one customer intent; avoid overlapping tools; you cannot script what Alexa says, so you design the data it speaks from. Responses may be visual and/or spoken; voice-only must work. (v1.0 also quoted "one decision per turn" and a sentence about structured errors. Neither appears in the pages retrieved, so we treat them as our own design principles rather than citations.)
 
-- **One finding per turn.** Rank, lead with one (≤ 25 words as spoken), offer "why?" (→ `explain_problem`).
-- **Describe stale information, not culprits.** Actor appears as provenance ("recorded by Tom, from the discharge paper"), never as the cause. Root cause is the superseded instruction.
-- **No false reassurance.** Empty results return coverage, not comfort: *"I found no conflicts in the 212 events on record, but 3 expected doses today aren't logged."* Never "everything's fine."
-- **Refusal feels safe, not broken.** State the constraint, the reason, who can do it, and what happens next ("I've asked Priya to approve it"). Never a bare error.
-- **Screen-optional.** Every answer complete as audio; screen adds evidence.
-- **Confirm, don't decorate.** Inline UI only to confirm an action or show evidence. MCP Apps / `ui://` is cut-first.
-- **A11y:** WCAG 2.2 AA (4.5:1 text), keyboard-complete, `aria-expanded` evidence drawer, `prefers-reduced-motion`, transcript is real text with screen-reader labels.
-- **Latency HUD** shows server time per call.
+- One finding per turn: rank, lead with one (≤ 25 words as spoken), offer "why?" (→ `explain_problem`).
+- Describe stale information, not culprits. The actor appears as provenance ("recorded by Tom, from the discharge paper"), never as the cause. Root cause is the superseded instruction.
+- No false reassurance. Empty results report coverage: *"I found no conflicts in the 212 events on record, but 3 expected doses today aren't logged."* Never answer "everything's fine."
+- Refusals feel safe: state the constraint, the reason, who can do it, and what happens next ("I've asked Priya to approve it"). Do not show a bare error.
+- Screen-optional: every answer is complete as audio; the screen adds evidence.
+- Inline UI appears only to confirm an action or show evidence. MCP Apps / `ui://` is the first thing cut.
+- A11y: WCAG 2.2 AA (4.5:1 text), keyboard-complete, `aria-expanded` evidence drawer, `prefers-reduced-motion`, transcript is real text with screen-reader labels.
+- Latency HUD shows server time per call.
 
 **Phrasing layer (client, simulated):** `client/phrase.ts` maps typed records to sentences by `ruleId` + `nextAction` enum. Default mode is deterministic templates, labelled in the UI "Simulated Alexa phrasing — Alexa+ generates its own." Optional `Bedrock` mode (§5.1) may only restate fields present in the record and must cite event IDs.
 
@@ -147,7 +147,7 @@ Design basis (Amazon Alexa+ MCP design guide `[verified]`): customers arrive by 
 | Client | React 19 + Vite, built static | No dev server or CDN at judge time |
 | Tests | Vitest | Native TS/ESM |
 | UI | Hand-rolled CSS + tokens | No framework drift |
-| Optional agent | `npm run start:agent` — Node endpoint using AWS SDK/Bedrock for utterance → tool routing | Off by default; needs AWS credentials; never touches `/mcp`; documents an AWS integration for the AWS Builder mini |
+| Optional agent | `npm run start:agent`, Node endpoint using AWS SDK/Bedrock for utterance → tool routing | Off by default; needs AWS credentials; never touches `/mcp`; documents an AWS integration for the AWS Builder mini |
 
 ### 5.2 Repo layout
 ```
@@ -175,10 +175,10 @@ second-look/
 `POST /mcp` → JSON-RPC parse → session lookup (in-memory Map, random UUID) → token → caregiver → tool handler → `fold(events)` (cached, invalidated on append) → rules → typed result. No network or model calls. Cold `fold` on ~300 events < 25ms.
 
 ### 5.4 Identity & authority (new)
-- `Authorization: Bearer demo-priya | demo-tom | demo-elena` (non-secret, seeded in the fixture, labelled demo). **No token → `guest` (role `none`).** Zero-config handshake still works.
-- **No tool takes an `actorId` argument.** A client-supplied actor would make refusals theater.
-- `actorRole` on each event is **resolved server-side at write time**, never client-supplied.
-- Real Alexa+ would supply the subject via OAuth account linking; the shared-speaker problem (voice profile mismatch) is outside what an MCP server can observe — stated in the README.
+- `Authorization: Bearer demo-priya | demo-tom | demo-elena` (non-secret, seeded in the fixture, labelled demo). No token → `guest` (role `none`). Zero-config handshake still works.
+- No tool takes an `actorId` argument. A client-supplied actor would make refusals theater.
+- `actorRole` on each event is resolved server-side at write time and never comes from the client.
+- Real Alexa+ would supply the subject via OAuth account linking; the shared-speaker problem (voice profile mismatch) is outside what an MCP server can observe. This is documented in the README.
 
 ---
 
@@ -204,7 +204,7 @@ No UPDATE or DELETE exists in the write API. Corrections are new superseding eve
 `person.registered` · `caregiver.joined` · `caregiver.left` · `caregiver.authority_changed` · `plan.constraint_set` · `med.prescribed` · `med.changed` · `med.discontinued` · `med.dispensed` · `dose.recorded` · `dose.missed` · `observation.recorded` · `authority.change_requested` · `authority.change_refused` · `authority.change_applied` · `document.attached` · `problem.acknowledged`
 
 ### 6.3 Plan constraints & formulary
-The system asserts **no clinical knowledge of its own** beyond a small synthetic formulary (drug → class) in code. Barred classes come from a **sourced `plan.constraint_set` event** (e.g. `{barredClasses:["NSAID"], reason:"CKD stage 3"}`, source `clinician`). General nephrology guidance discourages NSAIDs in CKD `[inference: not re-verified this pass]`; the product enforces the plan's constraint, it does not diagnose. `med.prescribed` may carry `maxDailyMg`.
+The system asserts no clinical knowledge of its own beyond a small synthetic formulary (drug → class) in code. Barred classes come from a sourced `plan.constraint_set` event (e.g. `{barredClasses:["NSAID"], reason:"CKD stage 3"}`, source `clinician`). General nephrology guidance discourages NSAIDs in CKD `[inference: not re-verified this pass]`; the product enforces the plan's constraint and does not diagnose. `med.prescribed` may carry `maxDailyMg`.
 
 ### 6.4 Rules (pure functions over `CareState` and an `asOf` clock)
 | ID | Name | Fires when | Severity |
@@ -220,15 +220,15 @@ The system asserts **no clinical knowledge of its own** beyond a small synthetic
 
 Each rule returns `{ruleId, severity, what, evidence[eventIds], who, when, nextAction}`. `nextAction` is a machine-readable enum: `STOP_GIVING`, `CONTACT_PRESCRIBER`, `ASK_AUTHORIZED_CAREGIVER`, `CHECK_LABEL_WITH_PHARMACY`, `RECORD_MISSING_DOSE`, `ACKNOWLEDGE`.
 
-**Recording is never blocked.** A real dose that happened must be loggable by anyone; `record_dose` accepts and flags (R6) rather than refusing. Only **plan changes** are refused.
+Recording is never blocked. A real dose that happened must be loggable by anyone; `record_dose` accepts it and flags it (R6) instead of refusing. Only plan changes are refused.
 
 ### 6.5 Findings: grouping & ranking
-- Rule hits **group per medication** (R5 per request) into one `Finding`: `{findingId, medicationId, rules[], severity = max, evidence = union}`. `findingId` = hash of sorted evidence IDs (stable, speakable "finding 1").
-- **Rank:** severity desc → number of distinct rules desc → most recent evidence `ts` desc → `ruleId` asc. Fully deterministic; no `Date.now()` in the rule path.
+- Rule hits group per medication (R5 per request) into one `Finding`: `{findingId, medicationId, rules[], severity = max, evidence = union}`. `findingId` = hash of sorted evidence IDs (stable, speakable "finding 1").
+- Rank: severity desc → number of distinct rules desc → most recent evidence `ts` desc → `ruleId` asc. Fully deterministic; no `Date.now()` in the rule path.
 - `problem.acknowledged` hides a finding from "new" but keeps it in handoffs as *acknowledged, unresolved* until its cause clears.
 
 ### 6.6 Provenance rule
-Every `CareState` field carries `{value, eventId, actorId, ts, source}`. The server never emits an unsourced claim: the model phrases, we prove.
+Every `CareState` field carries `{value, eventId, actorId, ts, source}`. The server never emits an unsourced claim. The model may restate a field; it cannot add one.
 
 ---
 
@@ -238,22 +238,22 @@ Generated by code (`npm run seed`), byte-identical. Synthetic "Robert Alvarez", 
 
 | Day | Events | Findings |
 |---|---|---|
-| 1 | Registered; Priya `full`, Tom `record`, Elena `none`. `plan.constraint_set` NSAID barred (CKD 3; source clinician, nephrology note attached). Discharge summary prescribes **acetaminophen 500mg q6h** (`maxDailyMg` 3000) **and ibuprofen 800mg q6h PRN** (source document) | **R4 latent (high):** ibuprofen prescribed in a barred class — *catchable on Day 1* |
-| 3 | Priya discontinues ibuprofen (`source: pharmacy`, basis "pharmacist call"; **not prescriber-confirmed**) | — |
+| 1 | Registered; Priya `full`, Tom `record`, Elena `none`. `plan.constraint_set` NSAID barred (CKD 3; source clinician, nephrology note attached). Discharge summary prescribes **acetaminophen 500mg q6h** (`maxDailyMg` 3000) **and ibuprofen 800mg q6h PRN** (source document) | **R4 latent (high):** ibuprofen prescribed in a barred class, *catchable on Day 1* |
+| 3 | Priya discontinues ibuprofen (`source: pharmacy`, basis "pharmacist call"; not prescriber-confirmed) | none |
 | 4 | Elena requests acetaminophen every 4h → refused; Priya acknowledges | **R5** |
 | 5 | Tom records ibuprofen 14:00 (`source: caregiver`, followed paper summary) | **R3 + R4 (critical)** |
 | 5 eve | Elena records ibuprofen 20:00 | R3 + R4 + **R6**, same finding |
 | 6 | Priya records acetaminophen 08:00; Tom 12:00 (4h later); Priya acknowledges | **R1 (medium)** |
 | 7 | Pharmacy delivers acetaminophen **650mg ER** vs prescribed 500mg IR | **R2 (high)** |
-| 7 *(stretch)* | No acetaminophen recorded 08:00–20:00 | R7 |
+| 7 *(stretch)* | No acetaminophen recorded 08:00-20:00 | R7 |
 
-Open at handoff (3 unresolved): ibuprofen-after-stop finding; dispense mismatch; **discontinuation unconfirmed by prescriber** (derived gap). The live demo's refusal (Tom, "double") adds a second R5 entry on top of Elena's.
+Open at handoff (3 unresolved): the ibuprofen-after-stop finding; the dispense mismatch; the discontinuation no prescriber confirmed (derived gap). The live demo's refusal (Tom, "double") adds a second R5 entry on top of Elena's.
 
 ---
 
 ## 8. MCP Tool Surface (8 tools)
 
-> Each tool = one customer intent. Descriptions are written as intents with example phrases, because Alexa selects tools from them `[verified]`. Every result carries `structuredContent` validated by `outputSchema` **and** the same JSON in a `text` content block (spec compatibility `[inference: verify against spec text]`). Tool failures return `isError: true` with a structured payload. A **refusal is a successful result**, not an error.
+> Each tool = one customer intent. Descriptions are written as intents with example phrases, because Alexa selects tools from them `[verified]`. Every result carries `structuredContent` validated by `outputSchema` and the same JSON in a `text` content block (spec compatibility `[inference: verify against spec text]`). Tool failures return `isError: true` with a structured payload. A refusal returns a successful result, not an error.
 
 | Tool | Intent / example | Key input | Key output |
 |---|---|---|---|
@@ -266,7 +266,7 @@ Open at handoff (3 unresolved): ibuprofen-after-stop finding; dispense mismatch;
 | `get_timeline` | "Who gave ibuprofen Friday?" Also the audit log (filter `type: authority.*`) | `{personId, from?, to?, actorId?, type?}` | `{events:[...]}` |
 | `get_handoff` | "Hand off to Priya." | `{personId, toCaregiverId}` | `{situation, background, assessment, recommendation, settled, unresolved:[{item, kind, blocking, whoMustResolve, evidence[]}]}` |
 
-Notes: `assurance` is `NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, never "all clear". `settled` is `false` whenever `unresolved` is non-empty. Errors: `{code, message, missingFields[], suggestedFollowUp[]}` — never a stack trace.
+Notes: `assurance` is `NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, never "all clear". `settled` is `false` whenever `unresolved` is non-empty. Error payloads use `{code, message, missingFields[], suggestedFollowUp[]}` and never include a stack trace.
 
 ---
 
@@ -274,13 +274,13 @@ Notes: `assurance` is `NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, never "all c
 
 The repo must call the MCP technology in code (entry point and tool registration), not merely mention it `[verified, Official Rules page]`. Single endpoint `POST|GET|DELETE /mcp`; prefer the SDK's transport, then verify each item below against the spec text and the running server.
 
-1. **POST** with `Accept: application/json, text/event-stream`; body = one JSON-RPC message.
+1. POST with `Accept: application/json, text/event-stream`; body = one JSON-RPC message.
 2. Respond with `application/json` or `text/event-stream`; support both.
 3. If SSE: send a priming event with an ID and empty `data`; send `retry:` before closing so clients can resume via `Last-Event-ID`.
-4. **`MCP-Session-Id`**: secure visible-ASCII UUID at init; client echoes it; **400** if missing on non-init, **404** if terminated.
-5. **`MCP-Protocol-Version: 2025-11-25`** on later requests; absent → assume `2025-03-26`; invalid → **400**.
-6. **Validate `Origin`** on all connections (DNS-rebinding defence); invalid → **403**.
-7. Bind **127.0.0.1** by default.
+4. `MCP-Session-Id`: secure visible-ASCII UUID at init; client echoes it; 400 if missing on non-init, 404 if terminated.
+5. `MCP-Protocol-Version: 2025-11-25` on later requests; absent → assume `2025-03-26`; invalid → 400.
+6. Validate `Origin` on all connections (DNS-rebinding defence); invalid → 403.
+7. Bind 127.0.0.1 by default.
 8. `GET /mcp` → SSE stream or 405. `DELETE /mcp` + session ID → terminate or 405.
 9. JSON-RPC is UTF-8; never send one message on multiple streams.
 
@@ -296,10 +296,10 @@ The repo must call the MCP technology in code (entry point and tool registration
 Fixture is 100% synthetic, generated in code. No real PHI ever enters the repo or demo.
 
 ### 10.2 Threat model — honest scoping
-Household-owned record, not a clinical system. Realistic threats: (a) a layperson edits the plan without authority — handled by R5 and refusal; (b) a shared speaker lets the wrong person speak — **not detectable by the server**, documented; (c) the log file is edited on disk — the hash chain makes this detectable, not impossible.
+Household-owned record, not a clinical system. Realistic threats: (a) a layperson edits the plan without authority, handled by R5 and refusal; (b) a shared speaker lets the wrong person speak, which the server cannot detect and the README documents; (c) the log file is edited on disk, which the hash chain makes detectable but not impossible.
 
 ### 10.3 Auth — deliberate, documented
-No OAuth server. Identity = static demo persona tokens; no token = `guest`. We do **not** publish PRM/authorization-server metadata, because advertising auth we do not enforce misleads clients. README states why, and lists what a real add-on would need (§9).
+No OAuth server. Identity = static demo persona tokens; no token = `guest`. We do not publish PRM/authorization-server metadata, because advertising auth we do not enforce misleads clients. The README states why and lists what a real add-on would need (§9).
 
 ### 10.4 Gates
 No secrets in repo; `.env.example` empty. Zod validation on every tool; structured errors only. The JSONL file is gitignored; `fixtures/scenario.ts` is the source of truth.
@@ -318,10 +318,10 @@ No secrets in repo; `.env.example` empty. Zod validation on every tool; structur
 ## 12. Submission Checklist & Risks
 
 ### 12.1 Mini challenges (corrected)
-Rules allow **one track prize and one mini-challenge prize per project** `[verified]`, so a mini is additive to the $25K/$15K/$4K Alexa+ prizes, not an alternative. Each mini pays $5K cash + $5K AWS credits + an Amazon Developer meeting.
-- **AWS Builder** — qualifies with documented AWS integrations (e.g. Bedrock); Kiro Crew qualifies on its own `[verified]`. Cheapest path: the optional `start:agent` Bedrock router (§5.1). It also closes the demo's language gap, so build it once, claim it. $150 promo credits are available per participant via the form on the FAQ page `[verified]`.
-- **Open Source** — a new additional open-source project or a branch/fork/PR to a public repo; unmerged is fine `[verified]`. Cheapest path: extract the pure rules engine + provenance fold into a separate MIT repo (`care-reconcile`, ~1.5h).
-- **Go/no-go Oct 21 EOD**, only if Phases 0–3 are green. Default: AWS Builder yes (shared work), Open Source if ≥2h slack.
+Rules allow one track prize and one mini-challenge prize per project `[verified]`, so a mini adds to the $25K/$15K/$4K Alexa+ prizes. Each mini pays $5K cash + $5K AWS credits + an Amazon Developer meeting.
+- AWS Builder: qualifies with documented AWS integrations (e.g. Bedrock); Kiro Crew qualifies on its own `[verified]`. Cheapest path: the optional `start:agent` Bedrock router (§5.1). It also closes the demo's language gap, so build it once and claim it. $150 promo credits are available per participant via the form on the FAQ page `[verified]`.
+- Open Source: a new additional open-source project or a branch/fork/PR to a public repo; unmerged is fine `[verified]`. Cheapest path: extract the pure rules engine + provenance fold into a separate MIT repo (`care-reconcile`, ~1.5h).
+- Go/no-go Oct 21 EOD, only if Phases 0-3 are green. Default: AWS Builder yes (shared work), Open Source if ≥2h slack.
 
 ### 12.2 Risks (ranked)
 | Risk | Class | Mitigation |
@@ -350,24 +350,24 @@ Rules allow **one track prize and one mini-challenge prize per project** `[verif
 Never cut: `check_dose` or `find_problems`, refusal + audit, identity, README verification, friction log.
 
 ### 12.4 Submission artefacts
-- [ ] GitHub repo, **MIT license**. **Prefer public** (no invitations needed beyond the license file). If private, add `chris-trag, knmeiss, giolaq, anishamalde, mosesroth, emersonsklar` at submission time; invitations expire in 7 days and each person must accept `[verified]`
+- [ ] GitHub repo, MIT license. Prefer public (no invitations needed beyond the license file). If private, add `chris-trag, knmeiss, giolaq, anishamalde, mosesroth, emersonsklar` at submission time; invitations expire in 7 days and each person must accept `[verified]`
 - [ ] README: judge command in first 20 lines; synthetic-data and not-a-medical-device statements; what we simulate vs what Alexa+ supplies; why OAuth is out
-- [ ] Demo video **< 3:00**, public, English, YouTube/Vimeo; no third-party trademarks or music
+- [ ] Demo video < 3:00, public, English, YouTube/Vimeo; no third-party trademarks or music
 - [ ] Project description (what + how); state what was built during the window if any code pre-existed
-- [ ] **Product feedback on every tool/API/SDK used** (required): what for, what worked, what needs work, onboarding, would you build again
+- [ ] Product feedback on every tool/API/SDK used (required): what for, what worked, what needs work, onboarding, would you build again
 - [ ] Tracks and mini challenges entered; if AWS: which services and how
-- [ ] **Friction log** (optional, up to 10% bonus) and feature requests (optional)
+- [ ] Friction log (optional, up to 10% bonus) and feature requests (optional)
 
 ---
 
 ## 13. Glossary
-- **Reconciliation** — comparing what was prescribed, dispensed, and actually given, and flagging disagreement.
-- **Provenance** — `{eventId, actorId, ts, source}` on every claimed fact.
-- **Supersede** — a later event correcting an earlier one; the log is append-only so history survives.
-- **Finding** — one or more rule hits grouped per medication.
-- **SBAR** — Situation / Background / Assessment / Recommendation.
-- **NSAID** — non-steroidal anti-inflammatory drug (ibuprofen, naproxen); generally avoided in CKD `[inference]`.
-- **Streamable HTTP** — MCP transport replacing HTTP+SSE (2024-11-05).
+- **Reconciliation:** comparing what was prescribed, dispensed, and actually given, and flagging disagreement.
+- **Provenance:** `{eventId, actorId, ts, source}` on every claimed fact.
+- **Supersede:** a later event correcting an earlier one; the log is append-only so history survives.
+- **Finding:** one or more rule hits grouped per medication.
+- **SBAR:** Situation / Background / Assessment / Recommendation.
+- **NSAID:** non-steroidal anti-inflammatory drug (ibuprofen, naproxen); generally avoided in CKD `[inference]`.
+- **Streamable HTTP:** MCP transport replacing HTTP+SSE (2024-11-05).
 
 ---
 
@@ -384,11 +384,11 @@ Never cut: `check_dose` or `find_problems`, refusal + audit, identity, README ve
 | 2:35 | Honest limits: identity via tokens, data intake is roadmap; friction-log teaser | Judgment, not gaps |
 
 ## Appendix B — Definition of Done
-1. `git clone && npm install && npm start` → client at `:8787`, MCP at `:8787/mcp`; **verified on a clean container with no environment variables**.
+1. `git clone && npm install && npm start` → client at `:8787`, MCP at `:8787/mcp`; verified on a clean container with no environment variables.
 2. Raw `curl` transcript + MCP Inspector session for all 8 tools in README.
-3. R1–R6 fire on the fixture; unit-tested; identical output across 3 runs.
-4. Every unauthorized plan change is refused **and** logged **and** creates a pending request — integration test asserts all three.
-5. `npm run verify-log` passes on a clean log and **fails** after a manual edit.
+3. R1-R6 fire on the fixture; unit-tested; identical output across 3 runs.
+4. Every unauthorized plan change is refused, logged, and creates a pending request; an integration test asserts all three.
+5. `npm run verify-log` passes on a clean log and fails after a manual edit.
 6. The demo runs without touching storage directly.
 7. `find_problems` on an event set with no violations returns `NONE_FOUND_IN_RECORD` plus coverage (test).
 8. README states: synthetic data, not a medical device, what is simulated, why OAuth is out.
@@ -425,5 +425,5 @@ this records what the running system now does.
 | 2 | Added an eighteenth event type, `authority.change_declined` | A decline is a decision, not a refusal. Reusing `authority.change_refused` would overwrite the refusal that R5 audits |
 | 3 | R5 closes when a request is approved *or* declined; `get_handoff` gains `pendingRequests`, and `settled` now requires an empty list | A settled request has answered the question R5 asks; the pending item needed a read path and a UI |
 
-`check_dose` is also described in tool metadata as a **plan-consistency** check rather than a
-safety verdict: it enforces the constraints recorded in the plan and does not recommend a dose.
+`check_dose` is also described in tool metadata as a plan-consistency check rather than a safety
+verdict: it enforces the constraints recorded in the plan and does not recommend a dose.
