@@ -6,7 +6,7 @@
  * account of it.
  */
 import { displayNameFor } from '../identity.js';
-import { fail, ok, when, type ToolContext } from './_shared.js';
+import { fail, ok, resolvePersonId, when, type ToolContext } from './_shared.js';
 import {
   GetCurrentRegimenInput,
   GetCurrentRegimenOutput,
@@ -22,12 +22,14 @@ export function getCurrentRegimen(
   if (!parsed.success) {
     return fail({
       code: 'INVALID_INPUT',
-      message: 'personId is required.',
+      message: 'That request could not be read.',
       missingFields: parsed.error.issues.map((i) => i.path.join('.')).filter(Boolean),
       suggestedFollowUp: ['Ask for the person this is about, e.g. "What is Dad on?"'],
     });
   }
-  const { personId } = parsed.data;
+  const person = resolvePersonId(ctx, parsed.data.personId);
+  if (!person.ok) return fail(person.error);
+  const personId = person.personId;
   const state = ctx.store.careState();
 
   const medications = [...state.medications.values()]

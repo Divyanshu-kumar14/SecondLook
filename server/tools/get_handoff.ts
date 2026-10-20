@@ -10,7 +10,7 @@
 import { WHO_MAY_CHANGE } from '../authority.js';
 import { findProblems } from '../rules/index.js';
 import { displayNameFor } from '../identity.js';
-import { fail, ok, when, type ToolContext } from './_shared.js';
+import { fail, ok, resolvePersonId, when, type ToolContext } from './_shared.js';
 import {
   GetHandoffInput,
   GetHandoffOutput,
@@ -28,7 +28,10 @@ export function getHandoff(ctx: ToolContext, raw: unknown): CallToolResult {
       suggestedFollowUp: ['Ask who the handoff is for, e.g. "Hand off to Priya."'],
     });
   }
-  const { personId, toCaregiverId } = parsed.data;
+  const requested = resolvePersonId(ctx, parsed.data.personId);
+  if (!requested.ok) return fail(requested.error);
+  const personId = requested.personId;
+  const { toCaregiverId } = parsed.data;
   const state = ctx.store.careState();
   const person = state.person?.value;
   const findings = findProblems(state, ctx.asOf);
@@ -38,7 +41,9 @@ export function getHandoff(ctx: ToolContext, raw: unknown): CallToolResult {
       code: 'UNKNOWN_PERSON',
       message: `No person '${personId}' in the record.`,
       missingFields: [],
-      suggestedFollowUp: ['Call get_current_regimen for the list of people in the record.'],
+      suggestedFollowUp: [
+        'The record has no person yet; demo mode seeds one on boot (SL_LOG_MODE=demo).',
+      ],
     });
   }
 

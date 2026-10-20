@@ -12,7 +12,7 @@
 import { findProblems } from '../rules/index.js';
 import type { CareState } from '../fold.js';
 import { SEVERITY_RANK } from '../rules/types.js';
-import { fail, ok, type ToolContext } from './_shared.js';
+import { fail, ok, resolvePersonId, type ToolContext } from './_shared.js';
 import {
   FindProblemsInput,
   FindProblemsOutput,
@@ -25,12 +25,16 @@ export function findProblemsTool(ctx: ToolContext, raw: unknown): CallToolResult
   if (!parsed.success) {
     return fail({
       code: 'INVALID_INPUT',
-      message: 'personId is required.',
+      message: 'That request could not be read.',
       missingFields: parsed.error.issues.map((i) => i.path.join('.')).filter(Boolean),
       suggestedFollowUp: ['Ask about a specific person, e.g. "Are we doing this right for Dad?"'],
     });
   }
-  const { personId, since, minSeverity } = parsed.data;
+  const person = resolvePersonId(ctx, parsed.data.personId);
+  if (!person.ok) return fail(person.error);
+
+  const { since, minSeverity } = parsed.data;
+  const personId = person.personId;
   const asOf = ctx.asOf;
   const sinceMs = since === undefined ? undefined : Date.parse(since);
 

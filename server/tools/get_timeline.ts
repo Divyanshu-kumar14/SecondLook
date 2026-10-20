@@ -11,7 +11,7 @@
  * write time.
  */
 import { displayNameFor } from '../identity.js';
-import { fail, ok, when, type ToolContext } from './_shared.js';
+import { fail, ok, resolvePersonId, when, type ToolContext } from './_shared.js';
 import { GetTimelineInput, GetTimelineOutput, type GetTimelineOut } from '../schemas/tools.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { CareEvent } from '../schemas/events.js';
@@ -26,12 +26,16 @@ export function getTimeline(ctx: ToolContext, raw: unknown): CallToolResult {
   if (!parsed.success) {
     return fail({
       code: 'INVALID_INPUT',
-      message: 'personId is required.',
+      message: 'That request could not be read.',
       missingFields: parsed.error.issues.map((i) => i.path.join('.')).filter(Boolean),
       suggestedFollowUp: ['Ask which person, e.g. "Who gave ibuprofen on Friday?"'],
     });
   }
-  const { personId, from, to, actorId, type } = parsed.data;
+  const person = resolvePersonId(ctx, parsed.data.personId);
+  if (!person.ok) return fail(person.error);
+
+  const { from, to, actorId, type } = parsed.data;
+  const personId = person.personId;
   const fromMs = from === undefined ? undefined : Date.parse(from);
   const toMs = to === undefined ? undefined : Date.parse(to);
 

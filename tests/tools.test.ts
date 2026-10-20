@@ -101,7 +101,7 @@ describe('P3-7 · every tool satisfies the result contract', () => {
 
   it('rejects malformed arguments gracefully, naming the offending field', async () => {
     await withServer(async (client) => {
-      const result = await call(client, 'find_problems', {});
+      const result = await call(client, 'get_handoff', {});
       // The SDK validates against `inputSchema` BEFORE the handler runs, so it
       // answers first. That is deliberate: the strict schema is what tools/list
       // advertises as `required`, which is how a client knows what to send.
@@ -110,7 +110,7 @@ describe('P3-7 · every tool satisfies the result contract', () => {
       // See DECISIONS.md D21. What matters here is that it stays graceful.
       expect(result.isError).toBe(true);
       const text = textOf(result);
-      expect(text).toContain('personId');
+      expect(text).toContain('toCaregiverId');
       expect(text).not.toMatch(/at [A-Za-z]+\.[A-Za-z]+ \(/);
       expect(text).not.toContain('/home/');
     });
@@ -598,6 +598,45 @@ describe('P3-2 · read tools', () => {
       const result = await call(client, 'explain_problem', { findingId: 'f-nope' });
       expect(result.isError).toBe(true);
       expect(structured(result)).toMatchObject({ code: 'UNKNOWN_FINDING' });
+    });
+  });
+});
+
+describe('an assistant can use the read tools without knowing an internal id', () => {
+  it('defaults personId to the person the record is about', async () => {
+    await withServer(async (client) => {
+      const bare = structured(await call(client, 'find_problems', {}));
+      const explicit = structured(await call(client, 'find_problems', { personId: PERSON_ID }));
+      expect(bare).toEqual(explicit);
+      expect((bare.findings as unknown[]).length).toBe(3);
+    });
+  });
+
+  it('every read tool answers with personId omitted', async () => {
+    await withServer(async (client) => {
+      const regimen = structured(await call(client, 'get_current_regimen', {}));
+      expect((regimen.medications as unknown[]).length).toBe(2);
+
+      const timeline = structured(await call(client, 'get_timeline', { type: 'authority.*' }));
+      expect((timeline.events as unknown[]).length).toBeGreaterThan(0);
+
+      const handoff = structured(
+        await call(client, 'get_handoff', { toCaregiverId: 'caregiver-priya' }),
+      );
+      expect(handoff.settled).toBe(false);
+    });
+  });
+
+  it('an explicit id that is not this person is a domain error, not an empty answer', async () => {
+    await withServer(async (client) => {
+      const result = await call(client, 'find_problems', { personId: 'person-nobody' });
+      // The failure mode this guards: a typo must never come back as
+      // NONE_FOUND_IN_RECORD, which would read as "nothing is wrong".
+      expect(result.isError).toBe(true);
+      const payload = structured(result);
+      expect(payload).toMatchObject({ code: 'UNKNOWN_PERSON' });
+      expect(String(payload.message)).toContain(PERSON_ID);
+      expect((payload.suggestedFollowUp as string[]).join(' ')).toContain('Omit personId');
     });
   });
 });

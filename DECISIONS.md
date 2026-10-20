@@ -245,6 +245,13 @@ Consequence, stated plainly: our structured error shape applies to **domain** fa
 field. Both are graceful; neither leaks a stack trace. Both paths are asserted in
 `tests/tools.test.ts`.
 
+**Amendment (submission week).** One field is the exception: `personId` is `.optional()` on the
+four read tools, because this server is about exactly one person (`ToolContext.personId`) and no
+tool lists people — an assistant cannot discover an internal id from `tools/list`. Omitting it
+resolves to that person; an explicit id that is not that person returns `UNKNOWN_PERSON` rather
+than an empty result, because a typo must never be readable as `NONE_FOUND_IN_RECORD`. The
+reasoning above still holds for every other field: `required` stays on what a caller must supply.
+
 ## D22 — Both MCP response modes are supported and selectable *(new, Phase 3)*
 **Status: RESOLVED**
 

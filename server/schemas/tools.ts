@@ -94,7 +94,10 @@ export type RequestRegimenChangeIn = z.infer<typeof RequestRegimenChangeInput>;
 export type RequestRegimenChangeOut = z.infer<typeof RequestRegimenChangeOutput>;
 
 // ── 4. get_current_regimen ────────────────────────────────────────────────────
-export const GetCurrentRegimenInput = z.object({ personId: z.string().min(1) });
+// `personId` is OPTIONAL on read tools: this server is about one person
+// (`ToolContext.personId`), so omitting it is unambiguous. An assistant must not
+// have to discover an internal id before it can answer a question.
+export const GetCurrentRegimenInput = z.object({ personId: z.string().min(1).optional() });
 export const GetCurrentRegimenOutput = z.object({
   medications: z.array(
     z.object({
@@ -112,7 +115,7 @@ export type GetCurrentRegimenOut = z.infer<typeof GetCurrentRegimenOutput>;
 
 // ── 5. find_problems — the headline tool ──────────────────────────────────────
 export const FindProblemsInput = z.object({
-  personId: z.string().min(1),
+  personId: z.string().min(1).optional(),
   since: z.string().min(1).optional(),
   minSeverity: SeveritySchema.optional(),
 });
@@ -163,7 +166,7 @@ export type ExplainProblemOut = z.infer<typeof ExplainProblemOutput>;
 
 // ── 7. get_timeline — also the audit log ──────────────────────────────────────
 export const GetTimelineInput = z.object({
-  personId: z.string().min(1),
+  personId: z.string().min(1).optional(),
   from: z.string().min(1).optional(),
   to: z.string().min(1).optional(),
   /** READ-ONLY filter, not an identity claim. See the invariant note above. */
@@ -176,7 +179,7 @@ export type GetTimelineOut = z.infer<typeof GetTimelineOutput>;
 
 // ── 8. get_handoff — SBAR ─────────────────────────────────────────────────────
 export const GetHandoffInput = z.object({
-  personId: z.string().min(1),
+  personId: z.string().min(1).optional(),
   toCaregiverId: z.string().min(1),
 });
 export const GetHandoffOutput = z.object({

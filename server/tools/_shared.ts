@@ -58,6 +58,37 @@ export function toolError(
 }
 
 /**
+ * Resolve the person a read tool is about.
+ *
+ * `personId` is optional on read tools because this server is about exactly one
+ * person (`ToolContext.personId`). The alternative — forcing every caller to
+ * discover an internal id first — is the one thing an assistant cannot do from
+ * `tools/list`.
+ *
+ * An explicit id that is not this person is a DOMAIN ERROR, never an empty
+ * result: a typo that came back as `NONE_FOUND_IN_RECORD` would read as "nothing
+ * is wrong", which is the single answer this project must never give by
+ * accident.
+ */
+export function resolvePersonId(
+  ctx: ToolContext,
+  requested?: string,
+): { ok: true; personId: string } | { ok: false; error: ToolError } {
+  if (requested === undefined || requested === ctx.personId) {
+    return { ok: true, personId: ctx.personId };
+  }
+  return {
+    ok: false,
+    error: toolError(
+      'UNKNOWN_PERSON',
+      `No person '${requested}' in the record. This server is about '${ctx.personId}'.`,
+      [],
+      [`Omit personId to use '${ctx.personId}', or pass that id explicitly.`],
+    ),
+  };
+}
+
+/**
  * Build a successful tool result: the same JSON in `structuredContent` (validated
  * against `outputSchema`) and in a `text` block (for spec compatibility).
  *

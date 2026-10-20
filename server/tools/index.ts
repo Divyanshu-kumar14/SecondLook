@@ -142,7 +142,8 @@ export function registerAllTools(mcp: McpServer, opts: RegisterOptions): void {
       title: 'What medications is this person on?',
       description:
         'List the medications currently recorded for someone, with the dose, how often, ' +
-        'whether it is active, and who recorded it. Example phrases: "What is Dad on?", ' +
+        'whether it is active, and who recorded it. personId is optional — it defaults to ' +
+        'the person this record is about. Example phrases: "What is Dad on?", ' +
         '"What medications does Robert have?", "Which pills is he taking?".',
       inputSchema: shapeOf(GetCurrentRegimenInput),
       outputSchema: shapeOf(GetCurrentRegimenOutput),
@@ -159,6 +160,7 @@ export function registerAllTools(mcp: McpServer, opts: RegisterOptions): void {
         'should not have been, dispense that does not match the prescription, doses too ' +
         'close together, and unauthorised changes. Returns what it looked at alongside ' +
         'what it found, so an empty result is never mistaken for reassurance. ' +
+        'personId is optional — it defaults to the person this record is about. ' +
         'Example phrases: "Are we doing this right?", "Is anything wrong with Dad\'s ' +
         'medication?", "What problems are there with Robert\'s care?".',
       inputSchema: shapeOf(FindProblemsInput),
@@ -189,6 +191,7 @@ export function registerAllTools(mcp: McpServer, opts: RegisterOptions): void {
         'List what was recorded and when, for one person. Filter by date, by who recorded ' +
         'it, or by type of event — filtering to "authority" events shows every change ' +
         'that was requested or refused, which is the audit log. ' +
+        'personId is optional — it defaults to the person this record is about. ' +
         'Example phrases: "Who gave ibuprofen Friday?", "What happened on Tuesday?", ' +
         '"Show me the refusals".',
       inputSchema: shapeOf(GetTimelineInput),
@@ -205,7 +208,8 @@ export function registerAllTools(mcp: McpServer, opts: RegisterOptions): void {
         'Produce a handover summary for another caregiver: the situation, the background, ' +
         'an assessment, a recommendation, and an explicit list of what is still unresolved ' +
         'and who must resolve it. The summary is only marked settled when nothing is ' +
-        'outstanding. Example phrases: "Hand off to Priya", "Summarise this for Tom", ' +
+        'outstanding. personId is optional — it defaults to the person this record is about. ' +
+        'Example phrases: "Hand off to Priya", "Summarise this for Tom", ' +
         '"What does the next caregiver need to know?".',
       inputSchema: shapeOf(GetHandoffInput),
       outputSchema: shapeOf(GetHandoffOutput),
