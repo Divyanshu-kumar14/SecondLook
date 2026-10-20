@@ -58,7 +58,12 @@ export function originsForPort(localPort: number): string[] {
   return [
     ...new Set([
       `http://${host}:${localPort}`,
+      // Both loopback names are always legitimate. When the server binds
+      // 0.0.0.0 (a container), the bind address is neither name a browser
+      // uses, so deriving the list from `host` alone rejects the exact URL the
+      // README tells people to open.
       `http://localhost:${localPort}`,
+      `http://127.0.0.1:${localPort}`,
       ...devOrigins,
       ...extraOrigins,
     ]),
