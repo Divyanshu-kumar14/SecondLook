@@ -2,6 +2,11 @@
 
 **TypeScript** · Node 22+ · MCP server + browser client · MIT
 
+**Track:** Alexa+ — self-hosted MCP server, spec `2025-11-25`, Streamable HTTP.
+**Built:** from scratch during the submission window (first commit 2026-10-18).
+**Surface:** 9 MCP tools, one per customer intent.
+**Property:** every answer names the event ids behind it.
+
 When a household cares for someone across several carers and several sets of
 paperwork that never agree, Second Look answers three questions from an
 append-only record — *is this dose safe to give right now*, *are we doing this
@@ -432,6 +437,11 @@ We wrote down what happened, including the parts that went wrong.
   the plan expected to fail and did not.
 - [`FRICTION_LOG.md`](FRICTION_LOG.md) — 32 things that went wrong, what caused
   each, and what it cost.
+- [`FRICTION-SUBMISSION.md`](FRICTION-SUBMISSION.md) — the same friction written in
+  the submission field's schema: task, steps, expected vs. actual, severity,
+  workaround, suggestion.
+- [`docs/SUBMISSION.md`](docs/SUBMISSION.md) — the Devpost description and the map
+  from each judging criterion to the evidence for it.
 - [`DESIGN.md`](DESIGN.md) — interface direction: palette, motion, and the rules
   that keep the actor as provenance rather than cause.
 - [`specs/SECURITY-REVIEW.md`](specs/SECURITY-REVIEW.md) — the authority surface,
