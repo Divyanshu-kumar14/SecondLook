@@ -286,18 +286,17 @@ same dependency set the Docker runtime stage uses — boots, seeds the same 19
 events with the same hash, and answers `find_problems` with the same three
 findings. No server module imports a dev dependency at runtime.
 
-A [`Dockerfile`](Dockerfile) is included. It is **Debian-based, not Alpine**: the
-client build pulls two prebuilt glibc binaries and Alpine's musl would fail to
-load them (**D24**). The image itself was **not built here** — the build
-machine's Docker socket is `root:docker` and joining that group needs `sudo`.
-Both stages were instead replayed on Node 22 in pristine trees, using only the
-`COPY` set the Dockerfile names: 291 packages build the tree, and a runtime
-holding nothing but `dist` plus 95 production-only packages boots, serves the
-client, and returns the same seed hash and the same three findings. The replay
-also caught a bug the unbuilt image would have shipped: the runtime stage never
-copied `dist` from the builder, so `docker build` would have succeeded and
-`docker run` would have died on a missing module. Fixed with
-`COPY --from=builder /app/dist ./dist`.
+A [`Dockerfile`](Dockerfile) is included, and the image is **built and run**. It
+is **Debian-based, not Alpine**: the client build pulls two prebuilt glibc
+binaries and Alpine's musl would fail to load them (**D24**). Running it caught
+three bugs a build alone would not: the runtime stage never copied `dist` from
+the builder, so `docker build` succeeded and `docker run` died on a missing
+module; the server bound `127.0.0.1` inside the container, so `-p 8787:8787`
+refused every connection; and under that wildcard bind the origin allowlist
+omitted `127.0.0.1`, so the client's `/mcp` calls returned 403. All three are
+fixed. The rebuilt image reports **healthy**, serves the client, and answers
+`find_problems` with the canonical three findings and seed hash
+`0dc4f804d7c5d9b0`.
 
 ### Protocol conformance (PRD §9)
 
@@ -431,7 +430,7 @@ Stated plainly, because the demo is more useful when its edges are known.
 - **`verify-ui` is opt-in and needs a browser.** It is the check that caught the
   worst bug in this project, and it is also the one a judge is least likely to
   run. Nothing in the default gate can see that class of failure.
-- **The Docker image has not been built**, only its two stages replayed on Node 22.
+- **The Docker image is built locally, not in CI**, and its base tag is not digest-pinned.
 
 ## Design records
 

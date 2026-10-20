@@ -31,6 +31,12 @@ RUN npm run build
 FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
+# Bind all interfaces INSIDE the container. The server defaults to 127.0.0.1,
+# which is right for `npm start` on a laptop and wrong here: a published port
+# maps to the container's interface, not its loopback, so `-p 8787:8787` would
+# refuse every connection. The container's network namespace is the boundary;
+# exposure is still opt-in via `-p`.
+ENV HOST=0.0.0.0
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -56,8 +62,10 @@ EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# No environment variables. Every process.env read in server/ has a default
-# (`?? 'demo'`, `?? '.data/events.jsonl'`, ...), which is what lets DoD #1 hold.
+# No environment variables are REQUIRED. Every process.env read in server/ has a
+# default (`?? 'demo'`, `?? '.data/events.jsonl'`, ...), which is what lets DoD #1
+# hold. HOST is set above only because a container that binds loopback cannot be
+# reached through `-p`.
 #
 # Invoked directly rather than via `npm start`. npm as PID 1 does not forward
 # SIGTERM, so `docker stop` would wait out the full 10s timeout and then SIGKILL
