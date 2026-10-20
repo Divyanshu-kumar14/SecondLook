@@ -288,12 +288,16 @@ findings. No server module imports a dev dependency at runtime.
 
 A [`Dockerfile`](Dockerfile) is included. It is **Debian-based, not Alpine**: the
 client build pulls two prebuilt glibc binaries and Alpine's musl would fail to
-load them (**D24**). The image was **not built here** — the build machine's
-Docker socket is `root:docker` and joining that group needs `sudo`. Both stages
-were instead executed instruction by instruction in a pristine tree: the build
-stage produces the artefacts, and a runtime stage holding nothing but `dist`
-plus production-only dependencies boots, serves the client, and returns the
-same three findings.
+load them (**D24**). The image itself was **not built here** — the build
+machine's Docker socket is `root:docker` and joining that group needs `sudo`.
+Both stages were instead replayed on Node 22 in pristine trees, using only the
+`COPY` set the Dockerfile names: 291 packages build the tree, and a runtime
+holding nothing but `dist` plus 95 production-only packages boots, serves the
+client, and returns the same seed hash and the same three findings. The replay
+also caught a bug the unbuilt image would have shipped: the runtime stage never
+copied `dist` from the builder, so `docker build` would have succeeded and
+`docker run` would have died on a missing module. Fixed with
+`COPY --from=builder /app/dist ./dist`.
 
 ### Protocol conformance (PRD §9)
 
@@ -427,7 +431,7 @@ Stated plainly, because the demo is more useful when its edges are known.
 - **`verify-ui` is opt-in and needs a browser.** It is the check that caught the
   worst bug in this project, and it is also the one a judge is least likely to
   run. Nothing in the default gate can see that class of failure.
-- **The Docker image has not been built**, only its contents verified.
+- **The Docker image has not been built**, only its two stages replayed on Node 22.
 
 ## Design records
 

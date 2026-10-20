@@ -42,6 +42,7 @@ RUN npm ci --omit=dev --ignore-scripts \
 # `../fixtures/seed.js`, which resolves inside dist. Verified by booting a tree
 # containing nothing but dist + production node_modules — no `fixtures/` source
 # — and getting the canonical three findings back. See F36.
+COPY --from=builder /app/dist ./dist
 
 # The log is written to .data/ at runtime, so the app tree must be writable by
 # the unprivileged user we drop to below.
