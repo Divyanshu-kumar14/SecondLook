@@ -1,16 +1,16 @@
 # Second Look — household care reconciliation for Alexa+
 
-**TypeScript** · Node 22+ · MCP server + browser client · MIT
+TypeScript, Node 22+, an MCP server and a browser client, MIT.
 
-**Track:** Alexa+ — self-hosted MCP server, spec `2025-11-25`, Streamable HTTP.
-**Built:** from scratch during the submission window (first commit 2026-10-18).
-**Surface:** 9 MCP tools, one per customer intent.
-**Property:** every answer names the event ids behind it.
+Built for the Alexa+ track as a self-hosted MCP server on spec `2025-11-25`
+over Streamable HTTP. It has 9 tools, one per customer intent, and every answer
+names the event ids behind it. The first commit is 2026-10-18, inside the
+submission window.
 
 When a household cares for someone across several carers and several sets of
 paperwork that never agree, Second Look answers three questions from an
-append-only record — *is this dose safe to give right now*, *are we doing this
-right*, and *what still needs a human* — and shows the evidence for every answer.
+append-only record: is this dose safe to give right now, are we doing this
+right, and what still needs a human. Every answer shows the evidence for it.
 
 ## Run it
 
@@ -18,17 +18,17 @@ right*, and *what still needs a human* — and shows the evidence for every answ
 npm install && npm start
 ```
 
-Then open **<http://127.0.0.1:8787>**. No environment variables, no API keys, no
-database, no external services. Check it is alive:
+Then open **<http://127.0.0.1:8787>**. No environment variables, API keys,
+database, or external services. Check it is alive:
 
 ```bash
 curl -s http://127.0.0.1:8787/healthz
 npm run verify-log
 ```
 
-> **Not a medical device. All data is synthetic.** Every person, medication and
+> Not a medical device. All data is synthetic. Every person, medication and
 > event is generated in code by `npm run seed`. Nothing here is clinical advice:
-> the system enforces constraints that arrive in the care record, it does not
+> the system enforces constraints that arrive in the care record; it does not
 > decide what is medically correct on its own.
 
 ![The client showing a critical finding about ibuprofen with its four supporting records expanded, each labelled with who recorded it and when](docs/assets/findings-with-evidence.png)
@@ -38,8 +38,8 @@ npm run verify-log
 A household caring for someone with several medications has paperwork from a
 pharmacy and a hospital that do not agree, and more than one person recording
 what was given. When something goes wrong, nobody can reconstruct what was
-actually given, by whom, or whether it was safe to give — and the one artefact
-that could answer, the dose record, is usually a paper chart in a drawer.
+actually given, by whom, or whether it was safe. The one artefact that could
+answer, the dose record, is usually a paper chart in a drawer.
 
 Reconciliation done properly means reading the whole record, applying the care
 plan, and reporting what does not add up. Today that is manual, so it does not
@@ -47,37 +47,38 @@ happen at the moment it would help.
 
 ## What it does
 
-Second Look keeps an **append-only, hash-chained** record of what was given, by
-whom, under which authority, and applies six rules that encode the constraints a
-care plan actually states. It exposes the result as **9 MCP tools**, each written
+Second Look keeps an append-only, hash-chained record of what was given, by
+whom, under which authority, and applies six rules that encode the constraints
+a care plan actually states. It exposes the result as 9 MCP tools, each written
 as one customer intent, so an assistant can select them from how a person
-actually speaks.
+speaks.
 
-Three properties do the real work:
+Every answer carries its evidence. A finding names the event ids it was derived
+from, and the UI can open them. Nothing is asserted without a record.
 
-- **Every answer carries its evidence.** A finding names the event ids it was
-  derived from, and the UI can open them. Nothing is asserted without a record.
-- **An empty result says what was empty.** There is no "all clear". Assurance is
-  `NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, and every answer ships coverage
-  beside it.
-- **Recording is never blocked; changing is.** A dose that already happened must
-  always be loggable by anyone. Only plan changes are refused — and a refusal
-  leaves a pending request that an authorised carer can approve or decline.
+An empty result says what was empty. There is no "all clear". Assurance is
+`NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, and every answer ships coverage
+beside it.
+
+Recording is never blocked; changing is. A dose that already happened must
+always be loggable by anyone. Only plan changes are refused, and a refusal
+leaves a pending request that an authorised carer can approve or decline.
 
 ## See it work in 60 seconds
 
 Open <http://127.0.0.1:8787> and follow four beats. Each one is a button in the
-client, and each one is a real MCP tool call — never the log or the fold.
+client, and each button makes a real MCP tool call; none of them reads the log
+or the fold directly.
 
-1. **Second look** — asks *are we doing this right?* Three findings resolve in
+1. **Second look** asks *are we doing this right?* Three findings resolve in
    severity order: one critical, two high.
 2. **Switch persona to Tom** (role `record`), then **Ask to change**. The request
    is refused, the refusal is written to the audit log, and a pending request is
    created for someone with authority.
 3. **Switch persona to Priya** (role `full`), open **Handover**, and **Approve**
-   the request. The decision is written to the audit log and the pending item
-   disappears — the loop the refusal opened is now closed.
-4. **Can Tom give it?** — asks whether Tom may give ibuprofen right now. The
+   the request. The decision is written to the audit log, and the pending item
+   disappears.
+4. **Can Tom give it?** asks whether Tom may give ibuprofen right now. The
    answer is no, and it names the evidence.
 
 Other buttons: **Record a dose**, **What is he on?**, **Audit log**. The right
@@ -88,19 +89,21 @@ actually negotiated during the handshake.
 
 ## Key innovations
 
-- **A deterministic fold with provenance** — [`server/fold.ts`](server/fold.ts)
-  reduces the event log to a `CareState`, and every value it produces can name
-  the event it came from. Superseded records are kept, not overwritten.
-- **Stable finding identity** — [`server/finding-id.ts`](server/finding-id.ts)
-  derives a finding's id from its content and its oldest supporting evidence, so
-  acknowledging a finding does not make it reappear as a new one on the next
-  run. This is what makes a recorded demo repeatable.
-- **A refusal that is a result, not an error** — [`server/authority.ts`](server/authority.ts)
-  plus the tool handlers. A refusal returns a structured, renderable answer *and*
-  leaves an audit trail *and* creates a pending request.
-- **A verifier that checks bytes, not schema output** —
-  [`server/log.ts`](server/log.ts). See [Integrity](#integrity) for the bug this
-  caught.
+The fold in [`server/fold.ts`](server/fold.ts) reduces the event log to a
+`CareState`, and every value it produces can name the event it came from.
+Superseded records are kept, not overwritten.
+
+Finding ids are stable. [`server/finding-id.ts`](server/finding-id.ts) derives
+an id from the finding's content and its oldest supporting evidence, so
+acknowledging a finding does not make it reappear as a new one on the next run.
+That is what makes a recorded demo repeatable.
+
+A refusal is a result. [`server/authority.ts`](server/authority.ts) and the tool
+handlers return a structured, renderable answer, write an audit event, and
+create a pending request.
+
+[`server/log.ts`](server/log.ts) checks the bytes on disk, not the schema's
+projection of them. See [Integrity](#integrity) for the bug this caught.
 
 ## Architecture
 
@@ -117,7 +120,7 @@ flowchart TD
 ```
 
 One process serves both the MCP endpoint (`POST|GET|DELETE /mcp`) and the built
-client. The client is a *real* MCP client using the official SDK — it never reads
+client. The client is a real MCP client using the official SDK. It never reads
 the log or the fold, so every word rendered on screen came back from a tool.
 
 ## The nine tools
@@ -131,39 +134,39 @@ the log or the fold, so every word rendered on screen came back from a tool.
 | `get_current_regimen` | What is currently recorded, with dose, frequency and provenance. |
 | `find_problems` | Are we doing this right? All rule hits, grouped and ranked. |
 | `explain_problem` | Which rule raised this, and the evidence behind it. |
-| `get_timeline` | What was recorded and when. Filterable — the audit log. |
+| `get_timeline` | What was recorded and when. Filterable, so it doubles as the audit log. |
 | `get_handoff` | Situation, background, assessment, recommendation, what is still open, and what is waiting for approval. |
 
-`check_dose` answers a **consistency** question against the constraints in the
+`check_dose` answers a consistency question against the constraints in the
 recorded plan. It is not a dosage recommendation and not medical advice: the
-constraints come from the prescriber's record, and a human prescriber remains the
-only source of a plan change.
+constraints come from the prescriber's record, and a human prescriber remains
+the only source of a plan change.
 
 ## The scenario
 
 Robert Alvarez, 74, hip replacement, hypertension and CKD stage 3. NSAIDs are
 barred by his plan. His discharge paperwork prescribes ibuprofen anyway. Three
-days later a pharmacist's phone call — not the prescriber — stops it. On day five
+days later a pharmacist's phone call, not the prescriber, stops it. On day five
 it is given twice, once by a carer with no authority at all.
 
 That yields three unresolved problems, and the engine finds all of them:
 
 | Finding | Rules | Severity |
 | --- | --- | --- |
-| Ibuprofen given after it was stopped — and the stop was never prescriber-confirmed | R3, R4, R6 | critical |
+| Ibuprofen given after it was stopped, and the stop was never prescriber-confirmed | R3, R4, R6 | critical |
 | Pharmacy dispensed 650 mg ER against a prescribed 500 mg IR; doses only 4 h apart | R1, R2 | high |
 | A carer with role `none` asked to change the regimen | R5 | high |
 
 ### How it refuses, and how it does not
 
-Recording a dose is **never blocked**. A real dose that happened must always be
+Recording a dose is never blocked. A real dose that happened must always be
 loggable, so `record_dose` accepts and flags rather than refuses.
 
-Only **plan changes** are refused, and a refusal is a **successful result** — the
-caller renders it, and the log records it. That refusal is only credible because
+Only plan changes are refused. A refusal is a successful result: the caller
+renders it, and the log records it. That refusal is only credible because
 identity is resolved server-side. No tool accepts an `actorId` that establishes
-who is acting; the actor is stamped at write time from the bearer token. Verified
-by probe, not by assertion:
+who is acting; the actor is stamped at write time from the bearer token. A probe
+produced this table:
 
 ```text
 demo-tom (role: record)          refused   -> caregiver-tom
@@ -178,44 +181,45 @@ attributed to. Switch to Priya and the **Handover** column offers it for
 approval; either decision lands in the audit log, and the pending item
 disappears once it is settled.
 
-The second row is the one that matters. The request claimed full privilege in its
-arguments and was still refused, and the pending request was attributed to the
-token's identity — `caregiver-tom` — rather than the one the client asserted.
+The injected row claimed full privilege in its arguments and was still refused.
+The pending request was attributed to the token's identity, `caregiver-tom`, not
+the one the client asserted.
 
 ## What we simulate, and what a real add-on would need
 
-**Simulated here.** Utterance routing and spoken phrasing are deterministic
-templates, labelled as *Simulated* in the UI — Alexa+ generates its own. The
-server has no OAuth: identity is three static, non-secret, deliberately-labelled
-demo personas, and an absent or malformed token degrades to a guest with role
-`none`. We publish **no** authorization-server metadata, because advertising
-authentication we do not enforce would mislead clients.
+Utterance routing and spoken phrasing are deterministic templates, labelled as
+*Simulated* in the UI; Alexa+ generates its own. The server has no OAuth:
+identity is three static, non-secret, deliberately-labelled demo personas, and
+an absent or malformed token degrades to a guest with role `none`. We publish no
+authorization-server metadata, because advertising authentication we do not
+enforce would mislead clients.
 
 | Persona | Token | Role | Can |
 | --- | --- | --- | --- |
 | Priya | `demo-priya` | `full` | Change a regimen |
 | Tom | `demo-tom` | `record` | Log a dose, cannot change a regimen |
 | Elena | `demo-elena` | `none` | Read only |
-| *(no header)* | — | `none` | Read only |
+| *(no header)* | none | `none` | Read only |
 
-**A real Alexa+ add-on would need** OAuth 2.1 authorization-code with PKCE (S256),
+A real Alexa+ add-on would need OAuth 2.1 authorization-code with PKCE (S256),
 the `resource` parameter set to the server's canonical URI, a Protected Resource
-Metadata document (RFC 9728) at `/.well-known/oauth-protected-resource`, auth-server
-metadata at `/.well-known/oauth-authorization-server`, and a reachable remote URL
-with sub-500 ms round trips. One detail is easy to get backwards: an unauthenticated
-request must return **401 without `WWW-Authenticate`** — the platform lists that
-header as *Not Supported Yet*, so sending the challenge breaks the handshake
-instead of starting it. None of that is simulated here.
+Metadata document (RFC 9728) at `/.well-known/oauth-protected-resource`,
+auth-server metadata at `/.well-known/oauth-authorization-server`, and a
+reachable remote URL with sub-500 ms round trips. One detail is easy to get
+backwards: an unauthenticated request must return 401 without
+`WWW-Authenticate`. The platform lists that header as *Not Supported Yet*, so
+sending the challenge breaks the handshake instead of starting it. None of that
+is simulated here.
 
-**Out of scope for an MCP server:** the shared-speaker problem. If two people use
-one Echo, the server cannot tell them apart. That is a voice-profile concern, not
-something this protocol exposes — we say so rather than pretend to solve it.
+Out of scope for an MCP server: the shared-speaker problem. If two people use
+one Echo, the server cannot tell them apart. That is a voice-profile concern,
+not something this protocol exposes.
 
 ## Why the demo repeats exactly
 
 A demo that changes between takes cannot be recorded twice. `npm start`
-truncates and re-seeds a byte-identical log on every boot, so the first judge run
-and the third recording see the same state:
+truncates and re-seeds a byte-identical log on every boot, so the first judge
+run and the third recording see the same state:
 
 ```bash
 npm run seed && sha256sum .data/events.jsonl
@@ -229,9 +233,9 @@ npm run seed && sha256sum .data/events.jsonl
 
 ## Integrity
 
-The log is append-only and SHA-256 hash-chained. There is no update and no delete
-in the write API; corrections are new superseding events. Three tamper cases, run
-against a log seeded by a clean clone:
+The log is append-only and SHA-256 hash-chained. There is no update and no
+delete in the write API; corrections are new superseding events. Three tamper
+cases, run against a log seeded by a clean clone:
 
 ```text
 $ npm run verify-log                  # untouched
@@ -250,22 +254,20 @@ $ npm run verify-log                  # reorder keys only
 [verify-log] OK — 19 events, intact.   exit 0
 ```
 
-The second case used to **pass**. `#load()` ran every line through `EventSchema`,
-a Zod object, which strips unknown keys — so an injected field was discarded
-before hashing and the chain never saw it. The verifier now hashes what
-`JSON.parse` produced. Found by running the tamper check rather than assuming it
-had been run before; recorded as **F30** / **D25**.
+The second case used to pass. `#load()` ran every line through `EventSchema`, a
+Zod object, which strips unknown keys, so an injected field was discarded before
+hashing and the chain never saw it. The verifier now hashes what `JSON.parse`
+produced. We found it by running the tamper check; recorded as **F30** / **D25**.
 
-Editing one field is detected and located. It is still editable on disk — the
-chain makes tampering **detectable**, not impossible, and we do not claim
-otherwise. It also does not stop anyone who can rewrite the whole file from
-recomputing every hash: a chain with no signature attests to integrity, not to
-authorship.
+Editing one field is detected and located. The file is still editable on disk:
+the chain makes tampering detectable, not impossible. It also does not stop
+anyone who can rewrite the whole file from recomputing every hash. A chain with
+no signature attests to integrity, not authorship.
 
 ## Evidence
 
-Everything below was produced by running the commands on a clean clone of this
-repository with no environment variables set.
+These were produced on a clean clone of this repository with no environment
+variables set.
 
 ### Clean install and cold start
 
@@ -278,25 +280,24 @@ $ env -i npm start        # strips the entire environment
 [second-look]   log mode     : demo — seeded 19 events
 ```
 
-Cold start to listening: **0.58 s** against an 8 s budget. The seed is
+Cold start to listening: 0.58 s against an 8 s budget. The seed is
 `sha256 0dc4f804d7c5d9b0…`, identical on every machine.
 
-A production-only install — 100 packages against 290 for the full dev tree, the
-same dependency set the Docker runtime stage uses — boots, seeds the same 19
+A production-only install (100 packages against 290 for the full dev tree, the
+same dependency set the Docker runtime stage uses) boots, seeds the same 19
 events with the same hash, and answers `find_problems` with the same three
 findings. No server module imports a dev dependency at runtime.
 
-A [`Dockerfile`](Dockerfile) is included, and the image is **built and run**. It
-is **Debian-based, not Alpine**: the client build pulls two prebuilt glibc
-binaries and Alpine's musl would fail to load them (**D24**). Running it caught
-three bugs a build alone would not: the runtime stage never copied `dist` from
-the builder, so `docker build` succeeded and `docker run` died on a missing
-module; the server bound `127.0.0.1` inside the container, so `-p 8787:8787`
-refused every connection; and under that wildcard bind the origin allowlist
-omitted `127.0.0.1`, so the client's `/mcp` calls returned 403. All three are
-fixed. The rebuilt image reports **healthy**, serves the client, and answers
-`find_problems` with the canonical three findings and seed hash
-`0dc4f804d7c5d9b0`.
+A [`Dockerfile`](Dockerfile) is included, and the image is built and run. It
+uses Debian rather than Alpine: the client build pulls two prebuilt glibc
+binaries and Alpine's musl cannot load them (**D24**). Running it caught three
+bugs a build alone would not. The runtime stage never copied `dist` from the
+builder, so `docker build` succeeded and `docker run` died on a missing module.
+The server bound `127.0.0.1` inside the container, so `-p 8787:8787` refused
+every connection. Under that wildcard bind the origin allowlist omitted
+`127.0.0.1`, so the client's `/mcp` calls returned 403. All three are fixed. The
+rebuilt image reports healthy, serves the client, and answers `find_problems`
+with the canonical three findings and seed hash `0dc4f804d7c5d9b0`.
 
 ### Protocol conformance (PRD §9)
 
@@ -329,12 +330,13 @@ Lines        : 96.81% ( 334/345 )
 ```
 
 Coverage is scoped to the rules engine, the fold, the log and the authority
-model — the four places where a defect would be a safety problem. Current:
-**96.8 %** overall, **100 %** on `server/authority.ts` and on every rule.
+model, the four places where a defect would be a safety problem. Current: 96.8 %
+overall, 100 % on `server/authority.ts` and on every rule.
 
 ### Latency
 
-`npm run bench` — 300 iterations on the 19-event demo log, 100 on a 500-event log:
+`npm run bench` runs 300 iterations on the 19-event demo log and 100 on a
+500-event log:
 
 | Measurement | p50 | p95 | Budget | Result |
 | --- | --- | --- | --- | --- |
@@ -353,7 +355,7 @@ found 0 vulnerabilities
 
 ## Configuration
 
-Nothing is required. Every variable has a working default — that is the point.
+Nothing is required. Every variable has a working default.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
@@ -362,8 +364,8 @@ Nothing is required. Every variable has a working default — that is the point.
 | `SL_CLIENT_DIR` | No | `dist/client` | Built client to serve |
 | `SL_LOG_FILE` | No | `.data/events.jsonl` | Append-only JSONL log path |
 | `SL_LOG_MODE` | No | `demo` | `demo` truncates and re-seeds on boot; `persist` appends |
-| `SL_ALLOWED_HOSTS` | No | — | Extra trusted `Host` values, comma-separated |
-| `SL_ALLOWED_ORIGINS` | No | — | Extra trusted `Origin` values, comma-separated |
+| `SL_ALLOWED_HOSTS` | No | none | Extra trusted `Host` values, comma-separated |
+| `SL_ALLOWED_ORIGINS` | No | none | Extra trusted `Origin` values, comma-separated |
 | `SL_MCP_JSON_RESPONSE` | No | `0` | `1` selects plain JSON instead of SSE (see [D22](DECISIONS.md)) |
 
 There are no secrets, keys or credentials in this project. The demo personas are
@@ -371,11 +373,11 @@ non-secret fixture values, deliberately labelled rather than hidden.
 
 ### A note on dependencies
 
-`find node_modules -name '*.node'` returns two files, from Vite's bundler and CSS
-minifier. Both are **prebuilt platform binaries** shipped as optional
-dependencies — nothing compiles from source and no toolchain is needed, which is
-what matters for portability. We state it rather than claim a purity we do not
-have. They are glibc builds, which is why the Docker image is Debian-based.
+`find node_modules -name '*.node'` returns two files, from Vite's bundler and
+CSS minifier. Both are prebuilt platform binaries shipped as optional
+dependencies, so nothing compiles from source and no toolchain is needed. That
+is what matters for portability. They are glibc builds, which is why the Docker
+image is Debian-based.
 
 ## Tech stack
 
@@ -403,60 +405,58 @@ npm run seed             # re-seed the deterministic log
 scripts/transcript.sh      # replay the demo spine
 ```
 
-`npm run dev` and `npm start` must not run at the same time — they both want
-port 8787.
+`npm run dev` and `npm start` must not run at the same time; they both want port
+8787.
 
-`verify-ui` is the one that arrived last and matters most. It needs a Chromium
-binary, and tells you how to get one if it cannot find it. It is deliberately
-**not** part of `npm run verify`: the fast, zero-config path a judge takes should
-stay that way.
+`verify-ui` arrived last and matters most. It needs a Chromium binary and tells
+you how to get one if it cannot find it. It stays out of `npm run verify`, so
+the fast, zero-config path a judge takes stays that way.
 
-It exists because **four tools were violating their own declared output schemas
-while every other gate passed** — the evidence drawer had never once rendered,
-and neither curl nor the in-memory test transport can see that class of bug. See
-**F33** / **D27**.
+It exists because four tools were violating their own declared output schemas
+while every other gate passed. The evidence drawer had never rendered, and
+neither curl nor the in-memory test transport can see that class of bug. See
+F33 / D27.
 
 ## Limitations
 
-Stated plainly, because the demo is more useful when its edges are known.
-
-- **Utterance routing and phrasing are simulated.** Alexa+ supplies its own.
-- **The demo has no authentication.** Tokens are public and labelled, so on a real
+- Utterance routing and phrasing are simulated. Alexa+ supplies its own.
+- The demo has no authentication. Tokens are public and labelled, so on a real
   deployment this is an open system. Identity would come from the host platform.
-- **The log is a plain JSONL file.** A real deployment needs encryption at rest,
-  and append-only sits in direct tension with any deletion policy. Unresolved.
-- **A hash chain is not a signature.** It detects edits, not a wholesale rewrite
-  by someone who can rewrite the whole file.
-- **`verify-ui` is opt-in and needs a browser.** It is the check that caught the
-  worst bug in this project, and it is also the one a judge is least likely to
-  run. Nothing in the default gate can see that class of failure.
-- **The Docker image is built locally, not in CI**, and its base tag is not digest-pinned.
+- The log is a plain JSONL file. A real deployment needs encryption at rest, and
+  append-only sits in direct tension with any deletion policy. Unresolved.
+- A hash chain is not a signature. It detects edits, not a wholesale rewrite by
+  someone who can rewrite the whole file.
+- `verify-ui` is opt-in and needs a browser. It is the check that caught the
+  worst bug in this project, and the one a judge is least likely to run. Nothing
+  in the default gate can see that class of failure.
+- The Docker image is built locally, not in CI, and its base tag is not
+  digest-pinned.
 
 ## Design records
 
 We wrote down what happened, including the parts that went wrong.
 
-- [`DECISIONS.md`](DECISIONS.md) — the decisions with reasoning, including the two
+- [`DECISIONS.md`](DECISIONS.md): the decisions with reasoning, including the two
   the plan expected to fail and did not.
-- [`FRICTION_LOG.md`](FRICTION_LOG.md) — 32 things that went wrong, what caused
+- [`FRICTION_LOG.md`](FRICTION_LOG.md): 32 things that went wrong, what caused
   each, and what it cost.
-- [`FRICTION-SUBMISSION.md`](FRICTION-SUBMISSION.md) — the same friction written in
+- [`FRICTION-SUBMISSION.md`](FRICTION-SUBMISSION.md): the same friction written in
   the submission field's schema: task, steps, expected vs. actual, severity,
   workaround, suggestion.
-- [`docs/SUBMISSION.md`](docs/SUBMISSION.md) — the Devpost description and the map
+- [`docs/SUBMISSION.md`](docs/SUBMISSION.md): the Devpost description and the map
   from each judging criterion to the evidence for it.
-- [`DESIGN.md`](DESIGN.md) — interface direction: palette, motion, and the rules
+- [`DESIGN.md`](DESIGN.md): interface direction, palette, motion, and the rules
   that keep the actor as provenance rather than cause.
-- [`specs/SECURITY-REVIEW.md`](specs/SECURITY-REVIEW.md) — the authority surface,
+- [`specs/SECURITY-REVIEW.md`](specs/SECURITY-REVIEW.md): the authority surface,
   probed, plus two limits we chose not to paper over.
-- [`specs/PRODUCT-FEEDBACK.md`](specs/PRODUCT-FEEDBACK.md) — what we used every
+- [`specs/PRODUCT-FEEDBACK.md`](specs/PRODUCT-FEEDBACK.md): what we used every
   dependency for, and where each one bit.
-- [`specs/advancements/`](specs/advancements/) — per-phase evidence.
+- [`specs/advancements/`](specs/advancements/): per-phase evidence.
 - [`specs/SECOND-LOOK-PRD.md`](specs/SECOND-LOOK-PRD.md) and
-  [`specs/SECOND-LOOK-IMPLEMENTATION-PLAN.md`](specs/SECOND-LOOK-IMPLEMENTATION-PLAN.md)
-  — the requirements and the plan this was built against.
+  [`specs/SECOND-LOOK-IMPLEMENTATION-PLAN.md`](specs/SECOND-LOOK-IMPLEMENTATION-PLAN.md):
+  the requirements and the plan this was built against.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Copyright (c) 2026 Divyanshu. 100% synthetic data;
-no real patient information is present in this repository.
+MIT. See [`LICENSE`](LICENSE). Copyright (c) 2026 Divyanshu. 100% synthetic
+data; no real patient information is present in this repository.
