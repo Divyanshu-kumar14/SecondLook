@@ -95,16 +95,20 @@ so.
 2 · A hash chain attests to integrity, not authorship. Anyone who can rewrite the whole log can
 recompute every hash. Detecting edits works and is tested. Detecting a wholesale rewrite by a
 writer would need signatures, which are out of scope for a local demo log and are not claimed in
-the README.
+the README. The optional S3 Object Lock anchor (`npm run anchor` / `npm run verify-anchor`) adds an
+external copy of a log prefix under WORM retention, but its local receipt is unsigned and it does
+not attest authorship; signatures remain out of scope.
 
 ---
 
 ## What would change before this handled real data
 
 1. Real authentication from the Alexa+ host context, replacing the static persona table.
-2. Signed events, or an external append-only anchor, to close limit 2.
-3. Encryption at rest for a log containing medication and health data. Currently a plain JSONL.
-4. A retention and deletion policy. Append-only and "never delete" are in direct tension, and
-   that tension is unresolved.
+2. Signed events to attest authorship. The optional S3 anchor covers external immutability for a
+   prefix, not who wrote it.
+3. Encryption at rest for the local log containing medication and health data. The optional S3
+   anchor copies are SSE-S3 encrypted, but the working JSONL is plaintext.
+4. A retention and deletion policy. The S3 anchor gives the copied prefix a WORM retention window;
+   the local log still has no deletion policy, and append-only is in direct tension with one.
 
 Items 3 and 4 matter most, and neither is claimed as handled.

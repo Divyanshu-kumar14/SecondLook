@@ -491,3 +491,28 @@ untouched. DESIGN.md is synced, and all eight pairs are in the harness as a
 regression guard. ~30 min, mostly measurement. I would measure the ratio
 before judging the result, and make the checker fail on impossible values:
 a parse bug hides the defect it was written to find.
+
+### F38 · The AWS trial plan set the Bedrock on-demand quota to zero · P5/AWS · RESOLVED
+
+The plan's AWS Builder path was an optional Bedrock router.
+`bedrock-runtime converse` against Nova Lite in `us-east-1` and
+`ap-southeast-2` returned `ThrottlingException: Too many tokens per day`.
+Service Quotas showed the Nova Lite on-demand requests/minute quota at **0
+applied**, **200 default** and **Not adjustable** on this account. A pending
+request for cross-region model inference tokens per minute was the wrong
+quota: it does not change the daily token/on-demand limit. The base demo never
+needed Bedrock, so the demo was not blocked; the AWS Builder claim was.
+
+I switched to a second AWS service that fits the same integrity story: S3 Object
+Lock. The bucket was created with `--object-lock-enabled-for-bucket`, the anchor
+uploaded the exact 19-event log and a manifest under `GOVERNANCE` retention, and
+`npm run verify-anchor` fetched both version IDs and checked the local prefix.
+The first live verifier run failed because `GetObjectRetention` nests `Mode` and
+`RetainUntilDate` under `Retention`; the fake had the same wrong shape. Fixed and
+re-ran to 15/15 checks. The switch was smaller than the planned router: a store
+wrapper, two commands, and a verifier. Cost: ~2 h including the live-response
+fix.
+
+The lesson is to check service quotas in the target account before committing a
+mini-challenge path to a service. The console's "Not adjustable" label is the
+signal to switch, not a prompt to file a quota request.

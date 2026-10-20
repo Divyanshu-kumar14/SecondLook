@@ -12,22 +12,29 @@ this dose consistent with the plan, are we doing this right, and what still need
 are nine MCP tools, one per customer intent, and each returns the event ids behind its claims, so
 nothing is asserted without evidence. An empty result states what was empty instead of
 "all clear". Recording a dose is never blocked. A plan change is refused as a structured
-result, written to the audit log, and left as a pending request another carer can approve. Built
-during the submission window: 223 tests, 17/17 protocol conformance, MIT.
+result, written to the audit log, and left as a pending request another carer can approve. An
+optional operator command anchors the log in Amazon S3 Object Lock for an external, immutable
+copy. Built during the submission window: 244 tests, 17/17 protocol conformance, MIT.
 
 ## Track and mini challenges
 
 Primary track: Alexa+.
 
-Mini challenges: none claimed. AWS Builder requires an AWS service, which this build does not
-use. Open Source asks for a new, additional project or contribution alongside the primary
-submission, and this repository is the primary submission.
+Mini challenges: AWS Builder. The integration is Amazon S3 Object Lock:
+`npm run anchor` uploads the exact event-log bytes and a manifest to a bucket
+with Object Lock retention, and `npm run verify-anchor` fetches those versions
+and proves the local log still contains the anchored head. It is an operator
+command, off by default; the base demo makes no AWS calls. Setup and live
+evidence: README §"AWS integration: S3 Object Lock audit anchor".
+
+Open Source asks for a new, additional project or contribution alongside the
+primary submission, and this repository is the primary submission.
 
 ## What each criterion is judged on, and where the evidence is
 
 | Criterion | What we point to |
 | --- | --- |
-| **Tech Implementation** | 223 tests, 96.8 % line coverage on the rules, fold, log and authority paths; `npm run verify-protocol` 17/17 against a running server; append-only SHA-256 hash chain with a verifier that checks stored bytes; identity and authority resolved server-side, never from tool arguments. |
+| **Tech Implementation** | 244 tests, 96.8 % line coverage on the rules, fold, log and authority paths; `npm run verify-protocol` 17/17 against a running server; append-only SHA-256 hash chain with a verifier that checks stored bytes; optional S3 Object Lock anchor with a verifier that fetches the anchored version and checks the local prefix; identity and authority resolved server-side, never from tool arguments. |
 | **Design** | [`DESIGN.md`](../DESIGN.md): severity carried by tint + named label + dot (never colour alone), reduced motion honoured at both the Motion and CSS layers, an evidence drawer with loading/loaded/failed states, tabular figures for anything compared down a column. Screenshots in `docs/assets/`. |
 | **Potential Impact** | The problem is stated and bounded in the README; the handover is an SBAR that names *who must resolve* each open item; every answer carries what it scanned. The deployment path below lists what is still missing for a real add-on. |
 | **Quality of the Idea** | The refusal → pending → approval loop: a refused plan change is a successful, renderable result that also writes an audit event and leaves work for someone with authority. Evidence ids on every claim. An unknown `personId` is refused with the id to use, so a typo can never read as "nothing is wrong". |
@@ -43,7 +50,9 @@ None of this is implemented yet:
 3. 401 without `WWW-Authenticate` on an unauthenticated request. The platform lists that header
    as *Not Supported Yet*, so sending the challenge breaks the handshake.
 4. A reachable remote URL with sub-500 ms round trips, in place of the local `127.0.0.1` bind.
-5. At rest: encryption for the event log, and a deletion policy reconciled with append-only.
+5. At rest: encryption for the local event log, and a deletion policy reconciled with
+   append-only. The optional S3 anchor copies are SSE-S3 encrypted and under Object Lock; the
+   local log is still plaintext.
 6. Multiple people per record. Today the server is about one person; identity per speaker is
    a voice-profile concern the protocol does not expose.
 
@@ -56,9 +65,11 @@ project even though the history is five days.
 
 ## What we do not claim
 
-- Not production-ready: no OAuth, no encryption at rest, binds loopback by default.
+- Not production-ready: no OAuth, no local-log encryption at rest, binds loopback by default.
 - Not a medical device; all data is synthetic and generated in code.
-- No AWS, Fire TV, Ring or Bee integration; this is an Alexa+ track entry.
+- No Fire TV, Ring or Bee integration; this is an Alexa+ track entry. AWS is the optional,
+  operator-run S3 Object Lock audit anchor, not a runtime dependency or a cryptographic
+  signature.
 
 ## Field checklist
 

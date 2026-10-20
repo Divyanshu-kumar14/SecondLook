@@ -264,6 +264,134 @@ the chain makes tampering detectable, not impossible. It also does not stop
 anyone who can rewrite the whole file from recomputing every hash. A chain with
 no signature attests to integrity, not authorship.
 
+For an external copy that survives a local rewrite, see the optional
+[AWS integration](#aws-integration-s3-object-lock-audit-anchor) below.
+
+## AWS integration: S3 Object Lock audit anchor
+
+The base demo is zero-config and makes no AWS calls. This optional operator
+command is the project's AWS Builder integration: it stores an immutable copy of
+the audit log in Amazon S3, so a local rewrite cannot silently rewrite the
+external record.
+
+### One-time AWS setup
+
+Object Lock can only be enabled when a bucket is created. Create a bucket in the
+region you will use; this example uses `ap-southeast-2`:
+
+```bash
+aws s3api create-bucket \
+  --bucket <bucket> \
+  --region ap-southeast-2 \
+  --create-bucket-configuration LocationConstraint=ap-southeast-2 \
+  --object-lock-enabled-for-bucket
+```
+
+Optionally set a default retention rule. The anchor also sets retention on each
+object explicitly:
+
+```bash
+aws s3api put-object-lock-configuration \
+  --bucket <bucket> \
+  --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":30}}}'
+```
+
+The identity running the anchor needs these permissions, scoped to the bucket:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadLockConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketVersioning",
+        "s3:GetBucketObjectLockConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::<bucket>"
+    },
+    {
+      "Sid": "WriteAndVerifyAnchors",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectRetention",
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:GetObjectRetention"
+      ],
+      "Resource": "arn:aws:s3:::<bucket>/anchors/*"
+    }
+  ]
+}
+```
+
+### Anchor and verify
+
+```bash
+npm run seed
+SL_ANCHOR_BUCKET=<bucket> SL_ANCHOR_REGION=ap-southeast-2 npm run anchor
+npm run verify-anchor
+```
+
+`npm run anchor` verifies the local hash chain before it uploads anything. It
+uploads the exact `events.jsonl` bytes and a manifest containing the event
+count, head hash, file SHA-256 and retention, then appends a local receipt to
+`.data/anchors.jsonl` with the S3 version IDs. `npm run verify-anchor` reads the
+latest receipt, fetches those exact object versions, checks the anchored chain,
+the manifest digest, the retention, and confirms that the local log still has
+the same head at that event count. New events appended after the anchor are
+allowed; a changed or truncated prefix fails.
+
+Dry run, no AWS credentials needed:
+
+```bash
+npm run anchor -- --dry-run --bucket example-bucket
+```
+
+Options: `--prefix`, `--retention-days` (default 30), `--mode` (`GOVERNANCE` or
+`COMPLIANCE`), `--log`, `--receipt`. Environment variables: `SL_ANCHOR_BUCKET`,
+`SL_ANCHOR_REGION`, `SL_ANCHOR_PREFIX`, `SL_ANCHOR_RETENTION_DAYS`,
+`SL_ANCHOR_RETENTION_MODE`, `SL_ANCHOR_RECEIPT`.
+
+A live run against an Object Lock bucket in `ap-southeast-2` (bucket and
+version IDs shortened):
+
+```text
+$ SL_ANCHOR_BUCKET=<bucket> SL_ANCHOR_REGION=ap-southeast-2 npm run anchor
+[anchor] log: .data/events.jsonl (19 events, head b4d8e855d0a5…)
+[anchor] s3://<bucket>/anchors/2026-10-20T22-52-02-781Z/events.jsonl (version c4z53Cr9…)
+[anchor] s3://<bucket>/anchors/2026-10-20T22-52-02-781Z/manifest.json (version 8TqW3_Ohg…)
+[anchor] receipt: .data/anchors.jsonl
+[anchor] retention: GOVERNANCE until 2026-11-19T22:52:02.781Z
+
+$ npm run verify-anchor
+[verify-anchor] ok   manifest-sha256: the manifest bytes match the digest recorded in the local receipt
+[verify-anchor] ok   anchored-log-sha256: anchored bytes match the manifest digest
+[verify-anchor] ok   local-log-head: local prefix ends at the anchored head hash
+[verify-anchor] ok   retention-manifest: GOVERNANCE until 2026-11-19T22:52:02.781Z
+[verify-anchor] ok   retention-log: GOVERNANCE until 2026-11-19T22:52:02.781Z
+[verify-anchor] PASS — anchored 19 events; local log has 19 (0 event(s) appended since the anchor).
+```
+
+The verifier runs 15 checks in total; the lines above are the last five. This run
+is not part of `npm run verify`; it needs an operator identity with the policy
+above.
+
+### What the anchor proves, and what it does not
+
+Object Lock gives the anchored objects WORM retention: they cannot be
+overwritten or deleted before the retention date, even by a principal with write
+access. `GOVERNANCE` retention can still be bypassed by a principal granted
+`s3:BypassGovernanceRetention`; the anchor's policy does not grant it. Use
+`COMPLIANCE` if the hold must not be shortened or removed by anyone. The
+verifier's local receipt tells it which versions to fetch; the receipt itself is
+a local, unsigned file. A privileged attacker who can rewrite the receipt and
+upload different objects under new keys can point the verifier at a different
+anchor. The anchor is an external, immutable copy and a tamper-detection aid,
+not a cryptographic signature or a proof of authorship.
+
 ## Evidence
 
 These were produced on a clean clone of this repository with no environment
@@ -272,8 +400,8 @@ variables set.
 ### Clean install and cold start
 
 ```text
-$ npm install
-added 290 packages in 8s
+$ npm ci
+added 316 packages in 4s
 
 $ env -i npm start        # strips the entire environment
 [second-look] listening on http://127.0.0.1:8787
@@ -283,13 +411,13 @@ $ env -i npm start        # strips the entire environment
 Cold start to listening: 0.58 s against an 8 s budget. The seed is
 `sha256 0dc4f804d7c5d9b0…`, identical on every machine.
 
-A production-only install (100 packages against 290 for the full dev tree, the
+A production-only install (121 packages against 316 for the full dev tree, the
 same dependency set the Docker runtime stage uses) boots, seeds the same 19
 events with the same hash, and answers `find_problems` with the same three
 findings. No server module imports a dev dependency at runtime.
 
 A [`Dockerfile`](Dockerfile) is included, and the image is built and run. It
-uses Debian rather than Alpine: the client build pulls two prebuilt glibc
+uses Debian rather than Alpine: the client build pulls prebuilt glibc
 binaries and Alpine's musl cannot load them (**D24**). Running it caught three
 bugs a build alone would not. The runtime stage never copied `dist` from the
 builder, so `docker build` succeeded and `docker run` died on a missing module.
@@ -324,8 +452,8 @@ passed: 17   failed: 0
 
 ``` text
 $ npm run verify
-  Test Files  14 passed (14)
-       Tests  223 passed (223)
+  Test Files  15 passed (15)
+       Tests  244 passed (244)
 Lines        : 96.81% ( 334/345 )
 ```
 
@@ -355,7 +483,7 @@ found 0 vulnerabilities
 
 ## Configuration
 
-Nothing is required. Every variable has a working default.
+Nothing is required for the base demo. Every variable has a working default.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
@@ -367,17 +495,30 @@ Nothing is required. Every variable has a working default.
 | `SL_ALLOWED_HOSTS` | No | none | Extra trusted `Host` values, comma-separated |
 | `SL_ALLOWED_ORIGINS` | No | none | Extra trusted `Origin` values, comma-separated |
 | `SL_MCP_JSON_RESPONSE` | No | `0` | `1` selects plain JSON instead of SSE (see [D22](DECISIONS.md)) |
+| `SL_ANCHOR_BUCKET` | Only for `npm run anchor` | none | S3 bucket with Object Lock enabled |
+| `SL_ANCHOR_REGION` | No | `AWS_REGION` or `us-east-1` | Region for the anchor bucket |
+| `SL_ANCHOR_PREFIX` | No | `anchors` | S3 key prefix |
+| `SL_ANCHOR_RETENTION_DAYS` | No | `30` | Object Lock retention, 1–3650 days |
+| `SL_ANCHOR_RETENTION_MODE` | No | `GOVERNANCE` | `GOVERNANCE` or `COMPLIANCE` |
+| `SL_ANCHOR_RECEIPT` | No | `.data/anchors.jsonl` | Local receipt file |
 
-There are no secrets, keys or credentials in this project. The demo personas are
-non-secret fixture values, deliberately labelled rather than hidden.
+The `SL_ANCHOR_*` variables are read only by `npm run anchor` and
+`npm run verify-anchor`. `npm start` never touches AWS.
+
+There are no secrets, keys or credentials in this project. The base demo and
+the test suite make no AWS calls. The optional anchor uses the standard AWS
+credential chain (environment, profile, or instance role) and never reads
+credentials from the repository. The demo personas are non-secret fixture
+values, deliberately labelled rather than hidden.
 
 ### A note on dependencies
 
-`find node_modules -name '*.node'` returns two files, from Vite's bundler and
-CSS minifier. Both are prebuilt platform binaries shipped as optional
-dependencies, so nothing compiles from source and no toolchain is needed. That
-is what matters for portability. They are glibc builds, which is why the Docker
-image is Debian-based.
+`find node_modules -name '*.node'` returns four files across three packages:
+Vite's Rolldown binding, Lightning CSS (present twice through Tailwind's
+dependency tree), and Tailwind's Oxide engine. All are prebuilt platform
+binaries shipped as optional dependencies, so nothing compiles from source and
+no toolchain is needed. That is what matters for portability. They are glibc
+builds, which is why the Docker image is Debian-based.
 
 ## Tech stack
 
@@ -391,6 +532,7 @@ image is Debian-based.
 | Styling | Tailwind CSS 4 | Tokens in `@theme`; 4.65 kB gzipped |
 | Motion | Motion 14 | One authored moment, `reducedMotion="user"` at the root |
 | Store | Append-only JSONL on disk | No database, no migration, hash-chained |
+| AWS (optional) | `@aws-sdk/client-s3` 3.1154.0 + Amazon S3 Object Lock | Immutable external audit anchor; no AWS calls in the base demo |
 
 ## Development
 
@@ -399,6 +541,8 @@ npm run dev              # server :8787 + Vite :5173
 npm run verify         # typecheck + lint + tests + coverage gate
 npm run verify-protocol    # PRD §9; needs the server up
 npm run verify-log       # hash chain; exits 1 if tampered
+npm run anchor           # optional: upload the log to S3 Object Lock
+npm run verify-anchor    # optional: verify the latest anchored copy
 npm run verify-ui        # drives the built client in a real browser
 npm run bench            # latency budgets
 npm run seed             # re-seed the deterministic log
@@ -426,6 +570,9 @@ F33 / D27.
   append-only sits in direct tension with any deletion policy. Unresolved.
 - A hash chain is not a signature. It detects edits, not a wholesale rewrite by
   someone who can rewrite the whole file.
+- The S3 anchor is optional and anchors a prefix of the log, not the live tail.
+  It needs an Object Lock bucket and AWS credentials; the local receipt is
+  unsigned, so the anchor is WORM storage and tamper detection, not a signature.
 - `verify-ui` is opt-in and needs a browser. It is the check that caught the
   worst bug in this project, and the one a judge is least likely to run. Nothing
   in the default gate can see that class of failure.
@@ -438,7 +585,7 @@ We wrote down what happened, including the parts that went wrong.
 
 - [`DECISIONS.md`](DECISIONS.md): the decisions with reasoning, including the two
   the plan expected to fail and did not.
-- [`FRICTION_LOG.md`](FRICTION_LOG.md): 32 things that went wrong, what caused
+- [`FRICTION_LOG.md`](FRICTION_LOG.md): 38 things that went wrong, what caused
   each, and what it cost.
 - [`FRICTION-SUBMISSION.md`](FRICTION-SUBMISSION.md): the same friction written in
   the submission field's schema: task, steps, expected vs. actual, severity,

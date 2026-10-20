@@ -125,13 +125,17 @@ Phase 0 exit criteria say "Zero native dependencies in the tree". Measured:
 
 ```
 node_modules/@rolldown/binding-linux-x64-gnu/rolldown-binding.linux-x64-gnu.node
-node_modules/lightningcss-linux-x64-gnu/lightningcss-linux-x64-gnu.node
+node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node
+node_modules/@tailwindcss/node/node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node
+node_modules/@tailwindcss/oxide-linux-x64-gnu/tailwindcss-oxide.linux-x64-gnu.node
 ```
 
-These arrive via Vite 8's bundler and CSS minifier as prebuilt,
-platform-specific binaries shipped as `optionalDependencies`. They are not
-compiled from source and need no toolchain. That is what the PRD protects with
-§11 "pure-JS dependencies only" / "no native compile" and P5-2.
+These arrive via Vite 8's bundler and CSS minifier, plus Tailwind 4's Oxide
+engine, as prebuilt, platform-specific binaries shipped as
+`optionalDependencies`. Lightning CSS appears twice through Tailwind's
+dependency tree. They are not compiled from source and need no toolchain. That
+is what the PRD protects with §11 "pure-JS dependencies only" / "no native
+compile" and P5-2.
 
 Decision: accept them and record the deviation.
 `find node_modules -name '*.node'` is reproducible evidence for the README.
@@ -315,8 +319,8 @@ It took 30 min to find, because the failure looks identical to the first one.
 Alpine is the conventional choice for a small Node image and would have been
 roughly 60 MB smaller. It would also not have worked.
 
-D14 records that the client build pulls two prebuilt platform binaries (Vite's
-bundler and CSS minifier). Those are glibc builds. On Alpine's musl they fail
+D14 records that the client build pulls prebuilt platform binaries (Vite's
+bundler and CSS minifier, plus Tailwind's Oxide engine). Those are glibc builds. On Alpine's musl they fail
 to load, and the build dies with a linker error. A judge who follows the
 README and runs `docker run` would hit it.
 
@@ -334,10 +338,10 @@ here. That is stated in the Dockerfile and the README.
 
 Both stages were run instruction by instruction in a pristine tree:
 
-- Builder: `npm ci --ignore-scripts` (291 packages), then `npm run build`
+- Builder: `npm ci --ignore-scripts` (316 packages), then `npm run build`
   succeeds in ~480 ms, producing `dist/node/server/index.js`,
   `dist/client/index.html` and the client bundle.
-- Runtime: `npm ci --omit=dev` (100 packages against 291 for the full dev
+- Runtime: `npm ci --omit=dev` (121 packages against 316 for the full dev
   tree), then boot on nothing but `dist` plus production modules. It serves
   the client, seeds the same 19 events with `sha256 0dc4f804…`, and answers
   `find_problems` with the canonical three findings.

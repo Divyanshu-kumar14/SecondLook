@@ -23,6 +23,8 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "verify": "npm run typecheck && npm run lint && npm run test:coverage",
+    "anchor": "tsx scripts/anchor.ts",
+    "verify-anchor": "tsx scripts/verify-anchor.ts",
     "verify-log": "tsx scripts/verify-log.ts",
     "verify-protocol": "bash scripts/verify-protocol.sh",
     "verify-ui": "tsx scripts/ui-check.ts",
@@ -30,6 +32,7 @@
     "bench": "tsx scripts/bench.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1154.0",
     "@modelcontextprotocol/sdk": "1.32.1",
     "express": "5.3.0",
     "zod": "4.6.7"
@@ -46,13 +49,13 @@
     "concurrently": "9.2.5",
     "eslint": "10.13.0",
     "globals": "17.13.0",
+    "motion": "^14.3.0",
     "playwright-core": "^1.64.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "tailwindcss": "^4.3.3",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "motion": "^14.3.0",
     "typescript-eslint": "8.71.2",
     "vite": "8.3.4",
     "vitest": "5.0.5"

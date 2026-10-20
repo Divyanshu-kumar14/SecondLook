@@ -41,6 +41,39 @@ missing session id returns 400 rather than a helpful error. Would build again.
 
 ---
 
+## `@aws-sdk/client-s3` 3.1154.0 / Amazon S3 Object Lock
+
+Used for: the optional audit anchor (`server/anchor-store.ts`, `scripts/anchor.ts`,
+`scripts/verify-anchor.ts`). The base server and the default test path do not import it.
+
+What worked. Five commands cover the whole integration: `GetBucketVersioning`,
+`GetObjectLockConfiguration`, `PutObject`, `GetObject`, and `GetObjectRetention`. The client
+applied per-object `GOVERNANCE` retention on upload and returned the version ID the receipt needs.
+`GetObject`'s `transformToByteArray()` gave us the exact bytes the manifest hashes, which is what
+the verifier compares.
+
+What did not work. Two things:
+
+1. The `GetObjectRetention` response nests `Mode` and `RetainUntilDate` under `Retention`. Our
+   first wrapper read them from the top level. The unit fake had the same wrong shape, so the
+   offline tests passed; the live verifier failed with "S3 returned no Object Lock retention
+   mode." The live run found the bug, and the fake was corrected to match the API. This is the one
+   place where the fake was wrong in the same direction as the code.
+
+2. Object Lock cannot be enabled on an existing bucket. The setup is a one-time
+   `create-bucket --object-lock-enabled-for-bucket`; if the bucket is wrong, the failure appears
+   only when the anchor runs. The wrapper now checks versioning and Object Lock before the first
+   upload and names the exact setup command.
+
+Onboarding. The SDK is large for five commands: the clean install added 25 packages (121
+production packages), against a pure-JS base that previously had no AWS dependency. A hand-rolled
+SigV4 client would be smaller but easier to get wrong. The Object Lock permissions are split
+between the bucket and the object, and the least-privilege policy in the README is the result of
+reading both. Would build again for an audit path; I would pin the response shape from the first
+test.
+
+---
+
 ## `zod` 4.6.7
 
 Used for: every tool input schema and the event schema in `server/schemas/events.ts`.
@@ -164,6 +197,7 @@ Onboarding. Unproblematic. Would build again.
 | Dependency | Would build again? | The one thing to know |
 |---|---|---|
 | MCP SDK | Yes | You do not own the error contract for schema failures |
+| S3 Object Lock (`@aws-sdk/client-s3`) | Yes | `GetObjectRetention` nests under `Retention`; enable Object Lock at bucket creation |
 | Zod 4 | Yes | It strips unknown keys; never hash its output |
 | Express 5 | Yes | Put the `Host`/`Origin` checks before the transport |
 | React 19 + Vite 8 | Yes | Two prebuilt binaries; glibc only |

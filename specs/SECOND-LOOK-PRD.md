@@ -19,7 +19,7 @@
 | 2 | Corrected Alexa Together facts | Amazon's notice: no longer available (update May 21, 2025); it was a paid subscription. v1.0 said "~Jun 2024" and "unpaid" |
 | 3 | "Layer is open" → caution on willingness-to-pay | Amazon retired a paid caregiver subscription, which is a warning about willingness to pay |
 | 4 | **Speaker identity specified** (bearer-token persona) | v1.0's headline refusal had no mechanism for knowing who is speaking |
-| 5 | **Demo language path specified** (phrasing layer, real mic input, optional Bedrock router, third-party-client clip) | v1.0 had no component that turns speech into tool calls or records into a sentence |
+| 5 | **Demo language path specified** (phrasing layer, real mic input, optional AWS integration (S3 anchor; Bedrock planned but blocked), third-party-client clip) | v1.0 had no component that turns speech into tool calls or records into a sentence |
 | 6 | Tools 9 → 8: added `check_dose`; removed `who_can_do`, `get_audit_log` | Amazon's design guide: one intent per tool, avoid overlap. Prevention ("can I give this?") beats forensics |
 | 7 | Rules: fixed R5 trigger, split out R6, R1 severity corrected, R4 gains a latent (pre-dose) mode | v1.0 fired R5 on a dose record (not a plan change); R1 "critical" for a 4h-vs-6h acetaminophen gap is alarm-fatigue bait |
 | 8 | Findings are **grouped per medication** and ranked with a deterministic tie-break | Three critical rules hit the same ibuprofen doses; "one decision per turn" needs one finding |
@@ -53,7 +53,7 @@ After hospital discharge, medication information is frequently wrong or misunder
 - **G2** Voice-first, screen-optional. Lead with one finding; every answer works as audio alone.
 - **G3** Refuse unauthorized plan changes, route the request to someone who can approve, and log the refusal as a first-class event. Identity comes from the token, and tool arguments cannot change it.
 - **G4** Be a conformant MCP server (spec 2025-11-25, Streamable HTTP) that any MCP client can call.
-- **G5** Zero-credential reproducibility: `git clone && npm install && npm start`. No AWS account, no API keys, no database server, no native modules.
+- **G5** Zero-credential reproducibility for the base demo: `git clone && npm install && npm start`. No AWS account, no API keys, no database server, no native modules. The optional S3 audit anchor is a separate operator command and is not on this path.
 - **G6** No LLM in the reasoning path. Findings are computed deterministically and cite event IDs. An LLM is permitted only at the edges (optional utterance routing; future document intake), and it may only restate fields present in a typed record.
 - **G7** Demo honesty. The simulator is labelled as a simulator. The README lists what real Alexa+ would supply (identity, speech) and what we substituted.
 
@@ -128,7 +128,7 @@ Design basis (Amazon Alexa+ MCP design guide `[verified]`): customers arrive by 
 - A11y: WCAG 2.2 AA (4.5:1 text), keyboard-complete, `aria-expanded` evidence drawer, `prefers-reduced-motion`, transcript is real text with screen-reader labels.
 - Latency HUD shows server time per call.
 
-**Phrasing layer (client, simulated):** `client/phrase.ts` maps typed records to sentences by `ruleId` + `nextAction` enum. Default mode is deterministic templates, labelled in the UI "Simulated Alexa phrasing — Alexa+ generates its own." Optional `Bedrock` mode (§5.1) may only restate fields present in the record and must cite event IDs.
+**Phrasing layer (client, simulated):** `client/phrase.ts` maps typed records to sentences by `ruleId` + `nextAction` enum. Default mode is deterministic templates, labelled in the UI "Simulated Alexa phrasing — Alexa+ generates its own." Optional `Bedrock` mode was planned for phrase restatement (§5.1) but is not in this build; the shipped AWS integration is the S3 Object Lock anchor.
 
 **Input:** default router is a deterministic utterance matcher (~10 patterns → tools), labelled "Simulated NLU". Optional browser `SpeechRecognition` for mic input and `speechSynthesis` for output; no API keys; typed fallback always works.
 
@@ -147,7 +147,7 @@ Design basis (Amazon Alexa+ MCP design guide `[verified]`): customers arrive by 
 | Client | React 19 + Vite, built static | No dev server or CDN at judge time |
 | Tests | Vitest | Native TS/ESM |
 | UI | Hand-rolled CSS + tokens | No framework drift |
-| Optional agent | `npm run start:agent`, Node endpoint using AWS SDK/Bedrock for utterance → tool routing | Off by default; needs AWS credentials; never touches `/mcp`; documents an AWS integration for the AWS Builder mini |
+| Optional AWS anchor | `npm run anchor` / `npm run verify-anchor`: Amazon S3 Object Lock copy of the event log + manifest | Off by default; needs AWS credentials; never touches `/mcp`; the AWS Builder integration in this build. The planned `start:agent` Bedrock router was blocked by the trial account's zero on-demand quota (2026-10-21). |
 
 ### 5.2 Repo layout
 ```
@@ -319,16 +319,16 @@ No secrets in repo; `.env.example` empty. Zod validation on every tool; structur
 
 ### 12.1 Mini challenges (corrected)
 Rules allow one track prize and one mini-challenge prize per project `[verified]`, so a mini adds to the $25K/$15K/$4K Alexa+ prizes. Each mini pays $5K cash + $5K AWS credits + an Amazon Developer meeting.
-- AWS Builder: qualifies with documented AWS integrations (e.g. Bedrock); Kiro Crew qualifies on its own `[verified]`. Cheapest path: the optional `start:agent` Bedrock router (§5.1). It also closes the demo's language gap, so build it once and claim it. $150 promo credits are available per participant via the form on the FAQ page `[verified]`.
+- AWS Builder: qualifies with documented AWS integrations (e.g. Bedrock or S3 Object Lock); Kiro Crew qualifies on its own `[verified]`. This build ships the optional Amazon S3 Object Lock audit anchor (`npm run anchor` / `npm run verify-anchor`, §5.1). It is an operator command, off by default, and the base demo needs no credentials. The planned `start:agent` Bedrock router was blocked by the trial account's zero on-demand quota (2026-10-21). The $150 promo credits are available per participant via the form on the FAQ page `[verified]`.
 - Open Source: a new additional open-source project or a branch/fork/PR to a public repo; unmerged is fine `[verified]`. Cheapest path: extract the pure rules engine + provenance fold into a separate MIT repo (`care-reconcile`, ~1.5h).
-- Go/no-go Oct 21 EOD, only if Phases 0-3 are green. Default: AWS Builder yes (shared work), Open Source if ≥2h slack.
+- Go/no-go Oct 21 EOD, only if Phases 0-3 are green. Default: AWS Builder yes (S3 anchor shipped), Open Source if ≥2h slack.
 
 ### 12.2 Risks (ranked)
 | Risk | Class | Mitigation |
 |---|---|---|
 | Judges can't build or run it | fatal | One command, zero config, no native deps; verify on a clean container |
 | MCP transport subtly non-conformant | fatal | SDK transport; §9 checklist; `curl` + Inspector transcripts in README |
-| **Demo is a scripted chat skin** (no language or voice path) | fatal if unfixed | Phrasing layer, real mic/speech option, Bedrock router, and a short clip of a third-party assistant calling the same server (FAQ: a bonus `[verified]`) |
+| **Demo is a scripted chat skin** (no language or voice path) | fatal if unfixed | Phrasing layer, real mic/speech option, a short clip of a third-party assistant calling the same server (FAQ: a bonus `[verified]`). The planned Bedrock router that would have closed the language gap was blocked by the trial account's zero quota; the shipped AWS integration is the S3 anchor. |
 | **Refusal rests on undefined identity** | fatal if unfixed | Bearer-token personas; no `actorId` args (§5.4) |
 | **Adoption: who enters the data?** Prescriptions, dispenses and labels must be typed or spoken by a layperson | blind spot (impact) | Name it in the video; roadmap = document/label intake with LLM **at the edge, human-confirmed**, deterministic core unchanged |
 | Overclaiming evidence | fixable | Only §1.1 claims; Appendix C register |

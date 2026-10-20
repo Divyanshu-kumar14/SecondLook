@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ── Why Debian, not Alpine ────────────────────────────────────────────────
-# Deliberately. D14 documents that the client build pulls two prebuilt platform
-# binaries (Vite's bundler and CSS minifier). Those are glibc builds; on Alpine's
-# musl libc they fail to load and the build dies with a linker error. Debian/slim
-# is the honest choice — it matches the host the demo was actually verified on.
+# Deliberately. D14 documents that the client build pulls prebuilt platform
+# binaries (Vite's bundler and CSS minifier, plus Tailwind's Oxide engine). Those
+# are glibc builds; on Alpine's musl libc they fail to load and the build dies
+# with a linker error. Debian/slim is the honest choice — it matches the host the
+# demo was actually verified on.
 # Switching to Alpine would require source builds and a toolchain, which is
 # exactly the portability risk DoD #1 exists to rule out.
 

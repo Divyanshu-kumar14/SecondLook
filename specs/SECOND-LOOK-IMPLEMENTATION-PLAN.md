@@ -110,7 +110,7 @@ PRD §12.3 is authoritative, and it lists cuts in the order they hurt least as y
 |---|---|---|
 | T0: never cut | MCP server on `/mcp` (conformant), 8 tools with schemas, R1 to R6, identity personas, refusal + audit + pending request, `check_dose`, `find_problems`, fixture + seed + `verify-log`, README with curl/Inspector evidence, demo video | Track-qualifying or the demo's spine |
 | T1: cut last | Latency HUD · Protocol Inspector (static fallback) · evidence drawer · `get_handoff` with `settled:false` · third-party-client clip | Differentiators that survive a cut |
-| T2: stretch | Browser mic-in/speech-out · Bedrock router (`start:agent`) + AWS Builder mini · `care-reconcile` open-source mini · R7/R8 · deterministic utterance router beyond ~10 patterns | Claimed only if time is green |
+| T2: stretch | Browser mic-in/speech-out · S3 Object Lock audit anchor (`npm run anchor` / `npm run verify-anchor`) + AWS Builder mini · `care-reconcile` open-source mini · R7/R8 · deterministic utterance router beyond ~10 patterns | Claimed only if time is green. The planned Bedrock router was blocked by the trial account's zero on-demand quota (2026-10-21); the S3 anchor shipped instead. |
 | T3: cut first | MCP Apps / `ui://` inline UI · R7 · R8 · Open Source mini · `get_handoff` · mic/speech + Bedrock · protocol inspector (degrade to a static handshake banner) | In the order listed |
 
 `get_handoff` is both T1 and on the T3 cut list (PRD cut line 4). Build it last within Phase 4; if it goes, `settled:false` logic stays inside `find_problems` (PRD's own instruction).
@@ -289,10 +289,16 @@ A mini is additive to the track prize (one track + one mini per project). Decide
 
 | Mini | Effort | Decision rule | Effort if yes |
 |---|---|---|---|
-| AWS Builder | Shared with the product | Yes by default if P3 is green. The cheapest path is the optional `npm run start:agent` Bedrock router, which also closes the demo's language gap. Off by default, never touches `/mcp`, needs no credentials for the base demo. | 1.5 h |
+| AWS Builder | Shared with the product | Yes, shipped as the optional S3 Object Lock audit anchor (`npm run anchor` / `npm run verify-anchor`). Off by default, never touches `/mcp`, needs no credentials for the base demo. The planned `start:agent` Bedrock router was dropped on 2026-10-21: the trial account's on-demand quota was zero and not adjustable. | S3 anchor |
 | Open Source | Separate repo | Yes only if ≥ 2 h slack after AWS Builder. Extract the pure rules engine + provenance fold into `care-reconcile` (MIT). An unmerged fork/PR to a public repo qualifies. | 1.5 h |
 
 If the mini takes the demo client below Tier-0 completeness, drop the mini. A working demo matters more than the $5 K prize.
+
+**Decision update 2026-10-21.** Bedrock could not be used on this account: the
+trial plan sets the Nova on-demand quota to 0, marked not adjustable, and calls
+returned `ThrottlingException: Too many tokens per day`. The AWS Builder
+integration shipped as the S3 Object Lock audit anchor instead; the Bedrock
+router remains a documented option, not a build claim.
 
 ## 14. Immediate next actions (Sun 18 Oct, in order)
 

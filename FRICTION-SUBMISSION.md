@@ -175,15 +175,41 @@ of its input, and using it as one silently changes what a checksum sees.
 
 **Expected.** A ~60 MB smaller image; no native compilation either way.
 
-**Actual.** The client build pulls two prebuilt platform binaries (the bundler and the CSS
-minifier). They are glibc builds and fail to load against musl, so the build dies with a linker
-error inside `docker run`, on a machine that had followed the README exactly.
+**Actual.** The client build pulls prebuilt platform binaries (the bundler, the CSS minifier, and
+Tailwind's engine). They are glibc builds and fail to load against musl, so the build dies with a
+linker error inside `docker run`, on a machine that had followed the README exactly.
 
 **Workaround.** `node:22-bookworm-slim`, and the requirement is stated in the README and the
 Dockerfile decision record.
 
 **Suggestion.** Publish the libc requirement in the install/container docs, or ship musl builds for
 the prebuilt binaries.
+
+## 9. The AWS trial plan sets Bedrock on-demand quotas to zero — Amazon Bedrock — Important
+
+**Task attempted.** Add an optional Bedrock router for utterance → tool routing, to qualify for the
+AWS Builder mini challenge.
+
+**Steps.** Confirmed Nova Lite model access, called `bedrock-runtime converse` in `us-east-1` and
+`ap-southeast-2` with a small prompt, and checked Service Quotas for the on-demand limit.
+
+**Expected.** A small on-demand request succeeds on the trial plan, or the quota is adjustable.
+
+**Actual.** Both regions returned `ThrottlingException: Too many tokens per day`. Service Quotas
+reported the Nova Lite on-demand requests/minute quota as **0 applied**, **200 default**, and
+**Not adjustable**. The quota request already pending was for cross-region model inference tokens
+per minute, which is a different limit and does not fix the daily token error.
+
+**Workaround.** Shipped the AWS Builder integration as an optional Amazon S3 Object Lock audit
+anchor instead: `npm run anchor` uploads the exact event log and a manifest under `GOVERNANCE`
+retention, and `npm run verify-anchor` fetches those versions and checks the local prefix. It needs
+no Bedrock quota, the base demo still needs no AWS credentials, and the live verifier passes 15/15
+checks.
+
+**Suggestion.** Show the effective on-demand quota and its adjustable flag in the Bedrock console's
+model-access page, not only in Service Quotas. A "Not adjustable" zero quota should be surfaced
+before a builder chooses a model, and the quota-request UI should say which quota controls the
+daily token error.
 
 ## Feature requests
 
@@ -192,3 +218,4 @@ the prebuilt binaries.
 | Per-request response-mode negotiation (entry 3) | Lets one endpoint serve both SSE and JSON clients without a restart | Important |
 | Configurable `supportedProtocolVersions` (entry 5) | A track that requires a minimum spec version needs to enforce it, not inherit it | Important |
 | Opt-in handler-level schema errors (entry 4) | One error contract instead of two | Nice-to-have |
+| Surface effective on-demand quotas before model selection (entry 9) | A zero, non-adjustable trial quota blocks the path after setup | Important |
