@@ -25,7 +25,7 @@ Mini challenges: AWS Builder. The integration is Amazon S3 Object Lock:
 with Object Lock retention, and `npm run verify-anchor` fetches those versions
 and proves the local log still contains the anchored head. It is an operator
 command, off by default; the base demo makes no AWS calls. Setup and live
-evidence: README §"AWS integration: S3 Object Lock audit anchor".
+evidence: [README §Optional AWS anchor](../README.md#optional-aws-anchor).
 
 Open Source asks for a new, additional project or contribution alongside the
 primary submission, and this repository is the primary submission.

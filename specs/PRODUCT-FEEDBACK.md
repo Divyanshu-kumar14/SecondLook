@@ -12,7 +12,7 @@ Used for: the whole server (`server/mcp.ts`) and the browser client (`client/mcp
 MCP through it.
 
 What worked. The client transport worked well: `Client` + `StreamableHTTPClientTransport`
-connected, negotiated a protocol version and called eight tools from inside a React component
+connected, negotiated a protocol version and called nine tools from inside a React component
 without hand-written JSON-RPC. The UI is built on the typed result envelope (`CallToolResult` with
 `structuredContent`). `zod` schemas convert to JSON Schema well enough that `tools/list` ships real
 schemas with no extra work. `McpError` covers errors. Every protocol detail in §9 that we checked

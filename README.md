@@ -6,6 +6,10 @@
 </p>
 
 <p align="center">
+  <code>npm ci &amp;&amp; npm start</code> then open <a href="http://127.0.0.1:8787">127.0.0.1:8787</a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0f766e?style=flat-square" alt="MIT license" /></a>
   <img src="https://img.shields.io/badge/node-22%2B-339933?style=flat-square" alt="Node.js 22+" />
   <img src="https://img.shields.io/badge/MCP-2025--11--25-111827?style=flat-square" alt="MCP 2025-11-25" />
