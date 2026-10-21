@@ -16,15 +16,6 @@ result, written to the audit log, and left as a pending request another carer ca
 optional operator command anchors the log in Amazon S3 Object Lock for an external, immutable
 copy. Built during the submission window: 244 tests, 17/17 protocol conformance, MIT.
 
-## Demo video
-
-[Watch the 2:42 demo](https://divyanshu-kumar14.github.io/SecondLook/video/) ·
-[direct MP4](https://github.com/Divyanshu-kumar14/SecondLook/releases/download/v1.0.0/second-look-casefile-1080p.mp4)
-
-The cut uses the real web MCP client, the recorded 19-event demo log, and the recorded S3 Object
-Lock anchor receipt. The anchor shown is the prior recorded receipt, not a fresh live run; the
-video states that it is an external immutable copy, not a cryptographic signature.
-
 ## Track and mini challenges
 
 Primary track: Alexa+.
@@ -86,7 +77,7 @@ project even though the history is five days.
 | --- | --- |
 | Description | the block at the top of this file |
 | Repository | `https://github.com/Divyanshu-kumar14/SecondLook` (public, MIT) |
-| Demo video | [public video page](https://divyanshu-kumar14.github.io/SecondLook/video/) · 2:42 · 1080p · English; direct MP4 on the `v1.0.0` release. Upload a YouTube/Vimeo mirror if the form requires that host. |
+| Demo video | public YouTube/Vimeo, English, under 3 minutes |
 | Product feedback | [`specs/PRODUCT-FEEDBACK.md`](../specs/PRODUCT-FEEDBACK.md) |
 | Friction log | [`FRICTION-SUBMISSION.md`](../FRICTION-SUBMISSION.md) |
 | Track | Alexa+ |

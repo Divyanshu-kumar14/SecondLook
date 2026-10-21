@@ -17,7 +17,6 @@
 </p>
 
 <p align="center">
-  <a href="https://divyanshu-kumar14.github.io/SecondLook/video/">Demo video</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#mcp-tools">MCP tools</a> ·
