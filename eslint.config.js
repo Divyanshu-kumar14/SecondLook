@@ -4,7 +4,19 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '.data/**'],
+    // `.artifacts/` is local-only (gitignored): UI-check screenshots and the
+    // throwaway Playwright capture scripts used to record the demo. Flat config
+    // does not read .gitignore, so anything untracked has to be named here or a
+    // fresh `npm run verify` fails on files a judge will never have.
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'coverage/**',
+      '.data/**',
+      '.artifacts/**',
+      '.opencode/**',
+      '.token-optimizer/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
