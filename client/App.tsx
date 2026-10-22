@@ -103,7 +103,9 @@ function Console() {
   }, [turns]);
 
   const push = useCallback((turn: Omit<Turn, 'id'>) => {
-    setTurns((prev) => [...prev, { ...turn, id: ++turnSeq }]);
+    const id = ++turnSeq;
+    setTurns((prev) => [...prev, { ...turn, id }]);
+    return id;
   }, []);
 
   const call = useCallback(
@@ -184,15 +186,23 @@ function Console() {
               ? findings.map((f) => speakFinding(f)).join(' ')
               : speakNoFindings(coverage.scannedEvents ?? 0, coverage.unloggedExpectedDoses ?? 0);
           setEvidenceLoading(true);
-          push({
+          // Push the answer BEFORE the evidence arrives, then patch that same
+          // turn by id. The drawer's three states only mean something if the
+          // loading state can be seen: the panel now says "Looking up the
+          // records…" and then fills in, instead of appearing fully formed.
+          // Patching by id keeps the evidence bound to this turn rather than to
+          // whichever turn happens to be latest.
+          const turnId = push({
             who: 'system',
             spoken,
             tool: routed.tool,
             ms: r.ms,
             findings,
-            evidence: await loadEvidence(findings),
+            evidence: {},
             note: `Simulated NLU matched “${routed.matched}”.`,
           });
+          const evidence = await loadEvidence(findings);
+          setTurns((prev) => prev.map((t) => (t.id === turnId ? { ...t, evidence } : t)));
         } else if (routed.tool === 'check_dose') {
           push({
             who: 'system',
