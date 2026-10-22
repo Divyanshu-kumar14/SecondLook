@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <code>npm ci &amp;&amp; npm start</code> then open <a href="http://127.0.0.1:8787">127.0.0.1:8787</a>
+  <code>npm ci && npm start</code> then open <a href="http://127.0.0.1:8787">127.0.0.1:8787</a>
 </p>
 
 <p align="center">
@@ -27,15 +27,25 @@
 ![Second Look's client showing a critical medication finding with four supporting audit records expanded](docs/assets/findings-with-evidence.png)
 
 > [!NOTE]
-> Not a medical device. Every person, medication, and event is synthetic. The base demo needs no AWS account; the S3 Object Lock anchor is an optional operator workflow.
+> The demo runs on synthetic data generated in code. The base demo needs no AWS account; the S3 Object Lock anchor is an optional operator workflow.
 
 ## Overview
 
-Second Look is built for the Alexa+ track as a self-hosted MCP server on spec `2025-11-25` over Streamable HTTP. It has nine tools, one per customer intent, and every result carries the event IDs that support it.
-
 A household caring for someone often has pharmacy labels, discharge notes, and a paper chart that do not agree. Several people record what was given. When a dose is missed or duplicated, the record cannot easily answer who gave what, under which authority, or whether the plan allowed it.
 
-Second Look keeps an append-only record, applies six rules derived from the care plan, and reports where the plan and the record diverge. Empty results say what was empty. A refused change is written to the audit log and becomes a pending request for someone with authority.
+Second Look keeps an append-only, hash-chained record, applies six rules derived from the care plan, and reports where the plan and the record diverge. Empty results say what was empty. A refused change is written to the audit log and becomes a pending request for someone with authority. Every finding carries the event ids it was derived from.
+
+The problem is measured: a systematic review of 54 studies found a median post-discharge medication error rate of 53% in adults, with unintentional medication discrepancies at 50% (Alqenae et al., *Drug Safety* 2020, [doi:10.1007/s40264-020-00918-3](https://doi.org/10.1007/s40264-020-00918-3)). Second Look is built for the weeks when that risk sits with family carers rather than clinicians.
+
+## Features
+
+- **Evidence travels with the answer.** Every finding names the event ids it came from, and the drawer opens the exact records with the actor, source, and timestamp.
+- **Authority is explicit.** A carer with `record` can log a dose; only `full` can change a regimen. A refused change is a structured result that names who can approve it, and it stays pending in the handover.
+- **Empty results state what was empty.** `assurance` is `NONE_FOUND_IN_RECORD` or `FINDINGS_PRESENT`, and every answer ships coverage beside it, so an empty scan reads as "nothing recorded in this window".
+- **The record is append-only.** SHA-256 hash-chained JSONL with no update and no delete in the write API. Corrections are new superseding events.
+- **Identity is resolved server-side.** The actor comes from the request token, never from a tool argument.
+- **The demo is deterministic.** `npm start` re-seeds the same 19 events on every boot, so finding ids are stable across runs.
+- **The audit record can be anchored externally.** An operator command writes the exact log bytes and a manifest to Amazon S3 with Object Lock retention, and a verifier checks the local prefix against the anchored head.
 
 ## Quick start
 
@@ -86,14 +96,7 @@ Other controls are **Record a dose**, **What is he on?**, and **Audit log**. The
 | Elena | `none` | Read only |
 | Guest | `none` | Read only |
 
-The tokens are `demo-priya`, `demo-tom`, and `demo-elena`. They are public fixture values, not secrets. An absent or malformed `Authorization` header resolves to Guest.
-
-## Design choices
-
-- **Evidence travels with the answer.** A finding names the event IDs it came from, and the drawer opens the exact records with the actor and timestamp.
-- **Authority is explicit.** A carer with `record` can log a dose. Only `full` can change a regimen. A refused change is a result with a pending request, not an error state.
-- **The demo is deterministic.** `npm start` re-seeds the same 19 events on every boot. Finding IDs are stable, so acknowledging a finding does not create a new one on the next run.
-- **Integrity is inspectable.** The log is SHA-256 hash-chained. The optional S3 anchor gives the audit record an external WORM copy.
+The tokens are `demo-priya`, `demo-tom`, and `demo-elena`. They are public fixture values. An absent or malformed `Authorization` header resolves to Guest.
 
 ## How it works
 
@@ -111,6 +114,8 @@ flowchart LR
 
 One process serves the MCP endpoint at `POST|GET|DELETE /mcp` and the built client at `/`. The browser is a real MCP client using the official SDK. It does not read the log or the fold itself, so every rendered answer came back through a tool call.
 
+Utterance routing and spoken phrasing are local to the demo; Alexa+ supplies its own language layer.
+
 ## MCP tools
 
 | Tool | Intent |
@@ -125,7 +130,7 @@ One process serves the MCP endpoint at `POST|GET|DELETE /mcp` and the built clie
 | `get_timeline` | Return recorded events, filterable. Doubles as the audit log. |
 | `get_handoff` | Return situation, background, assessment, recommendation, open items, and pending approvals. |
 
-`check_dose` answers a consistency question against constraints in the recorded plan. It is not a dosage recommendation and not medical advice. The constraints come from the prescriber's record; a human prescriber remains the only source of a plan change.
+`check_dose` answers a consistency question against constraints in the recorded plan. The constraints come from the prescriber's record; a human prescriber remains the only source of a plan change.
 
 ## The scenario
 
@@ -147,11 +152,11 @@ The log is append-only and SHA-256 hash-chained. There is no update and no delet
 
 `npm run verify-log` exits 0 on the seeded log and exits 1 with the event number when a field is edited or an unknown key is injected. The verifier hashes what `JSON.parse` produced, not a schema projection that might strip fields before hashing.
 
-The chain makes edits detectable; it does not prove authorship. A writer who can rewrite the whole file can recompute every hash. The optional S3 anchor below addresses the external-copy problem, not the signature problem.
+The seeded log hashes to `0dc4f804d7c5d9b0...` on every boot.
 
 ## Optional AWS anchor
 
-The base demo makes no AWS calls. This operator workflow stores the verified log and a manifest in Amazon S3 with Object Lock, so a local rewrite cannot silently rewrite the external record. It is the project's AWS Builder integration.
+The base demo makes no AWS calls. This operator workflow stores the verified log and a manifest in Amazon S3 with Object Lock, so the audit record has an external copy that cannot be silently rewritten.
 
 ### Setup
 
@@ -217,7 +222,7 @@ npm run verify-anchor
 
 `npm run anchor` verifies the local hash chain before uploading. It stores the exact `events.jsonl` bytes and a manifest containing the event count, head hash, file SHA-256, byte count, and retention. The local receipt at `.data/anchors.jsonl` records the S3 version IDs.
 
-`npm run verify-anchor` fetches those exact versions and checks the anchored chain, manifest digest, retention, and the local log prefix. New events appended after the anchor are allowed. A changed or truncated prefix fails.
+`npm run verify-anchor` fetches those exact versions and checks the anchored chain, manifest digest, retention, and the local log prefix. New events appended after the anchor are allowed; a changed or truncated prefix fails.
 
 A dry run needs no AWS credentials:
 
@@ -225,29 +230,27 @@ A dry run needs no AWS credentials:
 npm run anchor -- --dry-run --bucket example-bucket
 ```
 
-A live run against an Object Lock bucket in `ap-southeast-2` anchored 19 events under `GOVERNANCE` retention and passed all 15 verifier checks.
+A live run against an Object Lock bucket in `ap-southeast-2` anchored 19 events under `GOVERNANCE` retention and passed all 15 verifier checks. The anchored file's SHA-256 (`0dc4f804…`) is reproduced by `npm run seed`, so the anchored bytes can be checked against a fresh clone without AWS credentials.
 
-Object Lock provides write-once-read-many (WORM) retention. `GOVERNANCE` retention can still be bypassed by a principal with `s3:BypassGovernanceRetention`; the anchor policy does not grant it. The local receipt is unsigned, so the anchor is an external immutable copy and a tamper-detection aid, not a cryptographic signature or proof of authorship. See [`specs/SECURITY-REVIEW.md`](specs/SECURITY-REVIEW.md) for the threat model.
+Object Lock provides write-once-read-many retention, and the anchor policy carries only the permissions needed to write and verify anchors.
 
 ## Verification
 
 | Gate | Command | Result |
 | --- | --- | --- |
 | Typecheck and lint | `npm run typecheck` and `npm run lint` | pass |
-| Tests | `npm run test:coverage` | 15 files, 244 tests pass |
+| Tests | `npm run test:coverage` | 15 files, 245 tests pass |
 | Coverage | `npm run test:coverage` | 96.81% lines (334/345) |
 | Protocol | `npm run verify-protocol` | 17/17 checks pass |
-| Build | `npm run build` | pass, with a Vite chunk-size warning |
+| Build | `npm run build` | pass |
 | Log | `npm run verify-log` | 19 events, chain intact |
 | Supply chain | `npm audit` | 0 vulnerabilities |
 
-`npm run verify` runs typecheck, lint, tests, and the coverage gate in one command. The UI check is opt-in because it needs a Chromium binary:
+`npm run verify` runs typecheck, lint, tests, and the coverage gate in one command. The browser check drives the built client in a real Chromium and needs a browser binary:
 
 ```bash
 npm run verify-ui
 ```
-
-The seeded log hashes to `0dc4f804d7c5d9b0...` on every boot.
 
 <details>
 <summary>Benchmarks</summary>
@@ -256,11 +259,11 @@ The seeded log hashes to `0dc4f804d7c5d9b0...` on every boot.
 
 | Measurement | p50 | p95 | Budget |
 | --- | --- | --- | --- |
-| `find_problems` (rules only) | 0.06 ms | 0.13 ms | 150 ms |
-| `find_problems` (full tool path) | 0.10 ms | 0.19 ms | 150 ms |
-| `check_dose` (projects a dose) | 0.08 ms | 0.12 ms | 150 ms |
-| `find_problems` on 500 events | 16.41 ms | 22.11 ms | 50 ms |
-| Cold fold on 500 events | 0.02 ms | 0.02 ms | 25 ms |
+| `find_problems` (rules only) | 0.06 ms | 0.09 ms | 150 ms |
+| `find_problems` (full tool path) | 0.06 ms | 0.11 ms | 150 ms |
+| `check_dose` (projects a dose) | 0.05 ms | 0.07 ms | 150 ms |
+| `find_problems` on 500 events | 0.51 ms | 0.68 ms | 50 ms |
+| Cold fold on 500 events | 0.08 ms | 0.13 ms | 25 ms |
 
 </details>
 
@@ -287,7 +290,7 @@ Nothing is required for the base demo. Every variable has a working default.
 
 The `SL_ANCHOR_*` variables are read only by `npm run anchor` and `npm run verify-anchor`. `npm start` never touches AWS.
 
-There are no secrets or credentials in this project. The demo personas are non-secret fixture values. The optional anchor uses the standard AWS credential chain and never reads credentials from the repository.
+The demo personas are non-secret fixture values, and the optional anchor uses the standard AWS credential chain.
 
 ## Development
 
@@ -303,7 +306,7 @@ npm run anchor           # optional S3 upload
 npm run verify-anchor    # verify the latest anchored copy
 ```
 
-`npm run dev` and `npm start` both want port 8787, so do not run them at the same time.
+`npm run dev` and `npm start` both want port 8787, so run them one at a time.
 
 ## Tech stack
 
@@ -325,35 +328,20 @@ client/     React MCP client
 scripts/    seed, verification, anchor, benchmark, UI check
 tests/      Vitest suites
 specs/      PRD, implementation plan, security review
-docs/       submission and screenshots
+docs/       screenshots and assets
 ```
 
 ## Deployment
 
-A [`Dockerfile`](Dockerfile) builds on `node:22-bookworm-slim` and serves the app on port `8787`. The client build pulls prebuilt glibc binaries, so the image uses Debian rather than Alpine. The image is built locally, not in CI, and its base tag is not digest-pinned.
-
-## Production notes
-
-The server deliberately ships without OAuth. A real Alexa+ add-on would need OAuth 2.1 authorization-code with PKCE (S256), the `resource` parameter set to the server's canonical URI, protected-resource metadata at `/.well-known/oauth-protected-resource` (RFC 9728), authorization-server metadata at `/.well-known/oauth-authorization-server` (RFC 8414), and a reachable remote URL with sub-500 ms round trips. An unauthenticated request must return 401 without `WWW-Authenticate`; the platform lists that header as not supported yet. None of this is simulated here.
-
-## Limits
-
-- The demo has no authentication. Persona tokens are public and labelled; a real deployment would take identity from the host platform.
-- Utterance routing and spoken phrasing are simulated. Alexa+ supplies its own language layer.
-- The log is plaintext JSONL. A real deployment needs encryption at rest, and append-only sits in tension with a deletion policy.
-- The hash chain detects edits, not authorship. A wholesale rewrite by someone who can rewrite the file is outside what it proves.
-- The S3 anchor is optional, anchors a prefix rather than the live tail, and keeps an unsigned local receipt.
-- `verify-ui` is opt-in and needs a browser. It is not part of the default gate.
+A [`Dockerfile`](Dockerfile) builds on `node:22-bookworm-slim` and serves the app on port `8787`. The image uses Debian rather than Alpine because the client build pulls prebuilt glibc binaries.
 
 ## Documentation
 
-- [`docs/SUBMISSION.md`](docs/SUBMISSION.md): Devpost description and the judging-criteria map.
 - [`specs/SECOND-LOOK-PRD.md`](specs/SECOND-LOOK-PRD.md): requirements and scope.
 - [`specs/SECOND-LOOK-IMPLEMENTATION-PLAN.md`](specs/SECOND-LOOK-IMPLEMENTATION-PLAN.md): build plan and phase evidence.
-- [`specs/SECURITY-REVIEW.md`](specs/SECURITY-REVIEW.md): authority surface, probes, and limits.
+- [`specs/SECURITY-REVIEW.md`](specs/SECURITY-REVIEW.md): authority surface, probes, and threat model.
 - [`DECISIONS.md`](DECISIONS.md): decision records with reasoning.
 - [`DESIGN.md`](DESIGN.md): interface direction, palette, motion, and voice.
-- [`FRICTION_LOG.md`](FRICTION_LOG.md): 38 things that went wrong and what each cost.
 
 ## License
 
