@@ -65,6 +65,14 @@ export function findProblemsTool(ctx: ToolContext, raw: unknown): CallToolResult
   const doses = state.doses.filter((d) => state.medications.has(d.medicationId));
   const lastDose = doses.at(-1);
 
+  // The scan window is the RANGE of recorded timestamps, not the first and last
+  // line of the file: corrections and acknowledgements are appended with the
+  // time the thing they refer to happened, so append order is not chronological.
+  // Taking events.at(-1) reported a `to` earlier than events the scan had
+  // already used (2026-10-16 for a record reaching 2026-10-18), which is the one
+  // lie an evidence-first answer must not tell.
+  const stamps = events.map((e) => e.ts).sort();
+
   // Expected-but-unlogged doses: prescribed frequency implies more doses than
   // were recorded. This is the honest counterweight to an empty findings list.
   const unlogged = estimateUnloggedExpectedDoses(state, asOf);
@@ -73,8 +81,8 @@ export function findProblemsTool(ctx: ToolContext, raw: unknown): CallToolResult
     findings,
     coverage: {
       scannedEvents: events.length,
-      from: events.length > 0 ? (events[0]!.ts satisfies string) : null,
-      to: events.length > 0 ? (events.at(-1)!.ts satisfies string) : null,
+      from: stamps[0] ?? null,
+      to: stamps.at(-1) ?? null,
       lastDoseAt: lastDose?.ts ?? null,
       unloggedExpectedDoses: unlogged,
     },

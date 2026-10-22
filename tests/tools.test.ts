@@ -308,6 +308,23 @@ describe('DoD #7 · an empty-violation set returns NONE_FOUND_IN_RECORD plus cov
       expect((payload.findings as unknown[]).length).toBeGreaterThan(0);
     });
   });
+
+  // The log is not in timestamp order: acknowledgements are appended with the
+  // time of the thing they acknowledge. Coverage must still describe the range
+  // of timestamps the scan used, or the answer claims to have looked at less
+  // than it did.
+  it('reports the timestamp range, not the first and last appended line', async () => {
+    await withServer(async (client) => {
+      const payload = structured(await call(client, 'find_problems', { personId: PERSON_ID }));
+      const coverage = payload.coverage as { from: string; to: string };
+      const findings = payload.findings as { when: string }[];
+      for (const f of findings) {
+        expect(Date.parse(coverage.from)).toBeLessThanOrEqual(Date.parse(f.when));
+        expect(Date.parse(coverage.to)).toBeGreaterThanOrEqual(Date.parse(f.when));
+      }
+      expect(Date.parse(coverage.to)).toBeGreaterThanOrEqual(Date.parse('2026-10-17T10:00:00.000Z'));
+    });
+  });
 });
 
 describe('DoD #4 · an unauthorised plan change is refused, logged AND pending', () => {
